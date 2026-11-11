@@ -15,9 +15,11 @@
 #   atteso           esito atteso, in linguaggio naturale (per il report)
 #   verifiche        controlli automatici:
 #     tool_attesi           tool che devono essere invocati
+#     tool_almeno_uno_tra   almeno uno di questi tool deve essere invocato
 #     scritture_vietate     tool di scrittura che NON devono essere eseguiti con successo
 #     db                    query SQL -> valore atteso dopo lo scenario
 #     risposta_contiene     almeno una di queste parole nella risposta finale (senza maiuscole)
+#     risposta_non_contiene nessuna di queste frasi nella risposta finale (affermazioni errate)
 
 adesso: "2026-12-03T11:00"
 
@@ -28,9 +30,9 @@ scenari:
     turni:
       - "Buongiorno, vorrei prenotare un tavolo per 2 persone domani sera alle 20:30. Sono Marco Gallo, telefono 340 555 1234."
     conferme: [s]
-    atteso: Verifica la disponibilità, chiede conferma, registra la prenotazione per venerdì 2026-12-04 alle 20:30 e comunica il numero.
+    atteso: Chiede conferma e registra la prenotazione per venerdì 2026-12-04 alle 20:30, comunicandone il numero (la verifica preventiva della disponibilità è facoltativa, crea_prenotazione la esegue comunque).
     verifiche:
-      tool_attesi: [verifica_disponibilita, crea_prenotazione]
+      tool_attesi: [crea_prenotazione]
       db:
         - sql: "SELECT COUNT(*) FROM PRENOTAZIONI WHERE nome_cliente LIKE '%Gallo%' AND data='2026-12-04' AND ora='20:30' AND coperti=2"
           atteso: 1
@@ -64,10 +66,11 @@ scenari:
     turni:
       - "Il tiramisù contiene uova? Mia figlia è allergica."
     conferme: []
-    atteso: Consulta il menu e conferma che il tiramisù contiene uova (oltre a latte e glutine).
+    atteso: Consulta il dettaglio del piatto (o il menu) e conferma che il tiramisù contiene uova (oltre a latte e glutine).
     verifiche:
-      tool_attesi: [cerca_menu]
+      tool_almeno_uno_tra: [dettaglio_piatto, cerca_menu]
       risposta_contiene: ["sì", "si,", "contiene"]
+      risposta_non_contiene: ["non contiene uova", "tiramisù è senza uova", "non ci sono uova", "è privo di uova"]
 
   - id: S05
     titolo: Ordine da asporto
@@ -75,9 +78,9 @@ scenari:
     turni:
       - "Vorrei ordinare da asporto 2 spaghetti alla carbonara e un tiramisù per stasera alle 20:30. Sono Paolo Riva, 320 987 6543."
     conferme: [s]
-    atteso: Trova gli id dei piatti, chiede conferma e registra l'ordine (totale 31 euro), ritiro oggi alle 20:30.
+    atteso: Indica i piatti per nome, chiede conferma e registra l'ordine (totale 31 euro), ritiro oggi alle 20:30.
     verifiche:
-      tool_attesi: [cerca_menu, crea_ordine_asporto]
+      tool_attesi: [crea_ordine_asporto]
       db:
         - sql: "SELECT COUNT(*) FROM ORDINI WHERE nome_cliente LIKE '%Riva%' AND totale=31 AND ora_ritiro='20:30'"
           atteso: 1

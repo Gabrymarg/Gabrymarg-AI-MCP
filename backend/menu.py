@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import difflib
 import math
+import re
 import sqlite3
 import unicodedata
 from typing import Any
@@ -63,6 +65,49 @@ def risolvi_allergeni(conn: sqlite3.Connection, richiesti: list[str]) -> list[st
             {"allergeni_validi": sorted(validi)},
         )
     return risolti
+
+
+PAROLE_VUOTE = {"al", "alla", "alle", "allo", "agli", "ai", "di", "del", "della", "dei", "delle", "con",
+                "e", "il", "lo", "la", "i", "gli", "le", "un", "una", "uno", "porzione", "porzioni", "piatto"}
+
+
+def _radici(testo: str) -> list[str]:
+    """Parole significative ridotte a una radice, per tollerare plurali e varianti (carbonare/carbonara)."""
+    parole = re.findall(r"[a-z0-9]+", _norm(testo))
+    return [p[: max(4, len(p) - 2)] for p in parole if p not in PAROLE_VUOTE and len(p) >= 3]
+
+
+def trova_piatto(conn: sqlite3.Connection, nome: str) -> int:
+    """Risolve il nome di un piatto (anche parziale o al plurale) nel suo id.
+
+    Evita che il modello debba indovinare gli id: errore esplicito se il nome è ambiguo o assente.
+    """
+    piatti = conn.execute("SELECT id_articolo, nome FROM ARTICOLI WHERE attivo = 1").fetchall()
+    cercato = _norm(nome)
+    esatti = [p for p in piatti if _norm(p["nome"]) == cercato]
+    if len(esatti) == 1:
+        return esatti[0]["id_articolo"]
+    radici = _radici(nome)
+    if not radici:
+        raise ErroreDominio("PIATTO_INESISTENTE", f"Nome del piatto non valido: '{nome}'.")
+    candidati = [p for p in piatti if all(r in _norm(p["nome"]) for r in radici)]
+    if len(candidati) == 1:
+        return candidati[0]["id_articolo"]
+    if len(candidati) > 1:
+        raise ErroreDominio(
+            "PIATTO_AMBIGUO",
+            f"Più piatti corrispondono a '{nome}': chiedere al cliente quale intende.",
+            {"possibili_piatti": [p["nome"] for p in candidati]},
+        )
+    nomi = [p["nome"] for p in piatti]
+    simili = difflib.get_close_matches(nome, nomi, n=3, cutoff=0.4) or [
+        p["nome"] for p in piatti if any(r in _norm(p["nome"]) for r in radici)
+    ][:5]
+    raise ErroreDominio(
+        "PIATTO_INESISTENTE",
+        f"Nel menu non c'è nessun piatto chiamato '{nome}'.",
+        {"piatti_simili": simili},
+    )
 
 
 def categorie(conn: sqlite3.Connection) -> list[str]:
@@ -147,7 +192,13 @@ def cerca_menu(
     return {"numero_risultati": len(piatti), "piatti": piatti}
 
 
-def dettaglio_piatto(conn: sqlite3.Connection, id_articolo: int) -> dict[str, Any]:
+def dettaglio_piatto(
+    conn: sqlite3.Connection, id_articolo: int | None = None, nome: str | None = None
+) -> dict[str, Any]:
+    if nome:
+        id_articolo = trova_piatto(conn, nome)
+    if id_articolo is None:
+        raise ErroreDominio("PIATTO_MANCANTE", "Indicare il nome del piatto (o il suo id).")
     r = conn.execute(
         """SELECT a.*, c.nome AS categoria FROM ARTICOLI a JOIN CATEGORIE c ON c.id_categoria = a.id_categoria
            WHERE a.id_articolo = ? AND a.attivo = 1""",

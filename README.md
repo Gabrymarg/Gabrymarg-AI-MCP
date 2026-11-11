@@ -61,7 +61,7 @@ Il server MCP si può ispezionare anche da solo, ad esempio con MCP Inspector:
 ### Test
 
 ```bash
-python -m pytest                                        # 54 test, non serve Ollama
+python -m pytest                                        # 79 test, non serve Ollama
 python scenarios/run_scenarios.py --modello qwen2.5:3b  # 16 scenari con il modello reale
 ```
 
@@ -89,6 +89,8 @@ Il runner crea per ogni scenario un database nuovo con l'orologio fissato al 202
 - **Gestione degli errori:** tool inesistenti, argomenti non conformi al JSON Schema (validati *prima* di chiamare il server), errori di dominio, guasti e timeout. Ogni errore torna al modello come JSON strutturato, così il modello può correggersi.
 - **Human-in-the-loop:** quali tool richiedono conferma non è scritto nel codice dell'harness. Lo decide l'annotazione MCP `readOnlyHint` dichiarata dal server; un tool senza annotazione viene trattato come scrittura.
 - **Controllo di coerenza:** se la risposta finale afferma un'operazione (es. "ho prenotato") ma nel turno nessun tool di scrittura è andato a buon fine, l'harness non la consegna e rimanda il modello indietro con un avviso, una volta per turno. Si disattiva con `RISTO_GUARDRAIL=0`.
+- **Piatti indicati per nome:** il back-end risolve il nome ("2 carbonare", "il tiramisù") nel piatto corretto, quindi il modello non deve indovinare gli id. Nella prima batteria di test questo era la causa di risposte errate sugli allergeni.
+- **Date in linguaggio naturale:** "domani", "sabato", "24 dicembre" e "12/12" vengono convertite dal back-end, non dal modello.
 - **Schemi compatti per il modello:** gli schemi inviati al LLM sono semplificati (−28% di caratteri); la validazione usa lo schema completo del server.
 - **Log JSONL:** registra ogni passo (richieste e risposte del modello, tool, parametri, risultati, conferme, token, durate).
 - **Indipendenza dal modello:** il ciclo usa solo l'interfaccia `LLMProvider`. Ci sono un provider Ollama nativo, uno per endpoint compatibili OpenAI e un `MockProvider` per i test.

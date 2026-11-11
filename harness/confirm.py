@@ -24,7 +24,8 @@ def riepilogo(spec: ToolSpec, argomenti: dict[str, Any]) -> str:
             continue
         if chiave == "righe" and isinstance(valore, list):
             for r in valore:
-                righe.append(f"   - {r.get('quantita', 1)} x piatto {r.get('id_articolo')}"
+                piatto = r.get("nome") or f"piatto n. {r.get('id_articolo')}"
+                righe.append(f"   - {r.get('quantita', 1)} x {piatto}"
                              + (f" ({r['note']})" if r.get("note") else ""))
             continue
         righe.append(f"   {chiave.replace('_', ' ')}: {valore}")

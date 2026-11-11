@@ -202,6 +202,61 @@ def test_riconoscimento_affermazioni(testo, atteso):
     assert afferma_operazione(testo) is atteso
 
 
+def test_chiamata_testuale_valida_viene_eseguita(db):
+    testo_json = '{"name": "dettaglio_piatto", "parameters": {"nome": "tiramisù"}}'
+    copione = [risposta(testo_json), risposta("Sì, il tiramisù contiene uova.")]
+    esito, agente, _ = esegui(copione, "il tiramisù ha uova?")
+    assert esito.tool_invocati == ["dettaglio_piatto"]
+    assert "uova" in ultimo_risultato_tool(agente.messaggi)["risultato"]["allergeni"]
+    assert any(e["tipo"] == "tool_call_testuale_recuperata" for e in agente.log.eventi)
+    assert esito.risposta == "Sì, il tiramisù contiene uova."
+
+
+def test_chiamata_testuale_di_scrittura_chiede_conferma(db):
+    conn, _ = db
+    testo_json = "```json\n" + json.dumps({"name": "crea_prenotazione", "parameters": PRENOTA}) + "\n```"
+    copione = [risposta(testo_json), risposta("Va bene.")]
+    _, agente, _ = esegui(copione, "prenota", conferme=[False])
+    assert any(e["tipo"] == "conferma_utente" and not e["approvato"] for e in agente.log.eventi)
+    assert conta_prenotazioni(conn, "Anna Neri") == 0
+
+
+def test_chiamata_testuale_malformata_mai_mostrata_al_cliente(db):
+    malformata = '{"name":"verifica_disponibilita","parameters{"data":null}}'
+    esito, agente, _ = esegui([risposta(malformata), risposta("Mi dice a che ora?")], "posto domani?")
+    assert esito.risposta == "Mi dice a che ora?"
+    esito, _, _ = esegui([risposta(malformata), risposta(malformata)], "posto domani?")
+    assert esito.motivo_arresto == "errore_modello"
+    assert "{" not in esito.risposta
+
+
+@pytest.mark.parametrize(
+    "testo,stato",
+    [
+        ('{"name": "cerca_menu", "parameters": {}}', "recuperata"),
+        ('{"function": {"name": "cerca_menu", "arguments": "{\\"testo\\": \\"pasta\\"}"}}', "recuperata"),
+        ('{"name": "cerca_menu", "parameters": {', "malformata"),
+        ('{"name": "tool_sconosciuto", "parameters": {}}', "malformata"),
+        ("Certo! Abbiamo la carbonara a 12 euro.", "nessuna"),
+    ],
+)
+def test_estrazione_chiamate_testuali(testo, stato):
+    from harness.tool_testuali import estrai
+
+    assert estrai(testo, {"cerca_menu", "verifica_disponibilita"})[0] == stato
+
+
+def test_riepilogo_conferma_mostra_nomi_piatti():
+    from harness.confirm import riepilogo
+    from harness.llm.base import ToolSpec
+
+    testo = riepilogo(
+        ToolSpec("crea_ordine_asporto", "", {}, scrittura=True),
+        {"nome_cliente": "Riva", "righe": [{"nome": "carbonara", "quantita": 2}, {"id_articolo": 35}]},
+    )
+    assert "2 x carbonara" in testo and "1 x piatto n. 35" in testo
+
+
 @pytest.mark.parametrize("risposta_utente,attesa", [("s", True), ("sì", True), ("no", False), ("", False)])
 def test_conferma_interattiva(monkeypatch, risposta_utente, attesa):
     from harness.confirm import conferma_interattiva

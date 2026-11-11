@@ -59,7 +59,11 @@ def test_gruppo_troppo_numeroso(db):
 @pytest.mark.parametrize(
     "espressione,attesa",
     [("domani", "2026-12-04"), ("Dopodomani", "2026-12-05"), ("sabato", "2026-12-05"),
-     ("giovedì", "2026-12-03"), ("prossimo martedì", "2026-12-08"), ("oggi", "2026-12-03")],
+     ("giovedì", "2026-12-03"), ("prossimo martedì", "2026-12-08"), ("oggi", "2026-12-03"),
+     ("24 dicembre", "2026-12-24"), ("1 dicembre", "2026-12-01"), ("5 gennaio", "2027-01-05"),
+     ("sabato 5 dicembre", "2026-12-05"), ("il 12 dicembre 2026", "2026-12-12"),
+     ("12/12", "2026-12-12"), ("05/01/2027", "2027-01-05"), ("10-12-26", "2026-12-10"),
+     ("15 novembre", "2026-11-15"), ("1 ottobre", "2027-10-01")],
 )
 def test_date_relative(db, espressione, attesa):
     from backend.validazione import parse_data
@@ -67,9 +71,23 @@ def test_date_relative(db, espressione, attesa):
     assert parse_data(espressione).isoformat() == attesa
 
 
+def test_data_col_mese_nel_passato_rifiutata(db):
+    conn, _ = db
+    assert codice_errore(prenotazioni.verifica_disponibilita, conn, "1 dicembre", "20:00", 2) == "DATA_PASSATA"
+
+
+@pytest.mark.parametrize("valore", ["31 febbraio", "32/12", "domani sera tardi", "natale"])
+def test_date_non_riconosciute(db, valore):
+    from backend.validazione import parse_data
+
+    with pytest.raises(ErroreDominio) as exc:
+        parse_data(valore)
+    assert exc.value.codice == "DATA_NON_VALIDA"
+
+
 def test_formato_data_non_valido(db):
     conn, _ = db
-    assert codice_errore(prenotazioni.verifica_disponibilita, conn, "04/12/2026", "20:00", 2) == "DATA_NON_VALIDA"
+    assert codice_errore(prenotazioni.verifica_disponibilita, conn, "2026/31/12", "20:00", 2) == "DATA_NON_VALIDA"
 
 
 def test_crea_e_trova_prenotazione(db):
@@ -145,7 +163,46 @@ def test_branzino_esaurito(db):
     assert d["porzioni_disponibili"] == 0
 
 
+@pytest.mark.parametrize(
+    "nome,atteso",
+    [("tiramisù", "Tiramisù"), ("Tiramisu", "Tiramisù"), ("carbonare", "Spaghetti alla carbonara"),
+     ("i tagliolini al tartufo", "Tagliolini al tartufo nero"), ("lasagne", "Lasagne alla bolognese"),
+     ("Caprese", "Caprese")],
+)
+def test_trova_piatto_per_nome(db, nome, atteso):
+    conn, _ = db
+    assert menu.dettaglio_piatto(conn, nome=nome)["nome"] == atteso
+
+
+def test_nome_prevale_su_id_inventato(db):
+    conn, _ = db
+    # id 10 = carbonara: con il nome si ottiene comunque il tiramisù
+    d = menu.dettaglio_piatto(conn, id_articolo=10, nome="tiramisù")
+    assert d["nome"] == "Tiramisù" and "uova" in d["allergeni"]
+
+
+def test_piatto_ambiguo_e_inesistente(db):
+    conn, _ = db
+    with pytest.raises(ErroreDominio) as exc:
+        menu.dettaglio_piatto(conn, nome="risotto")
+    assert exc.value.codice == "PIATTO_AMBIGUO"
+    assert len(exc.value.dettagli["possibili_piatti"]) == 2
+    with pytest.raises(ErroreDominio) as exc:
+        menu.dettaglio_piatto(conn, nome="pizza margherita")
+    assert exc.value.codice == "PIATTO_INESISTENTE"
+
+
 # ------------------------------------------------------------------ ordini
+
+
+def test_ordine_per_nome(db):
+    conn, _ = db
+    o = ordini.crea_ordine_asporto(
+        conn, "Paolo Riva", "3209876543",
+        [{"nome": "carbonara", "quantita": 2}, {"nome": "tiramisù"}], "20:30", "stasera",
+    )
+    assert o["totale"] == 31.0 and o["data_ritiro"] == "2026-12-03"
+    assert [r["nome"] for r in o["righe"]] == ["Spaghetti alla carbonara", "Tiramisù"]
 
 
 def test_ordine_tartufo_scorte(db):

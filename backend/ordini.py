@@ -17,7 +17,7 @@ from typing import Any
 
 from backend import clock
 from backend.errori import ErroreDominio
-from backend.menu import porzioni_disponibili
+from backend.menu import porzioni_disponibili, trova_piatto
 from backend.orari import descrizione_orari, turni_del_giorno
 from backend.validazione import (
     nome_cliente,
@@ -104,11 +104,18 @@ def crea_ordine_asporto(
     quantita: dict[int, int] = defaultdict(int)
     note_righe: dict[int, str | None] = {}
     for riga in righe:
-        q = int(riga.get("quantita", 1))
+        q = int(riga.get("quantita") or 1)
         if not 1 <= q <= MAX_QUANTITA_RIGA:
             raise ErroreDominio("QUANTITA_NON_VALIDA", f"Quantità {q} non valida (da 1 a {MAX_QUANTITA_RIGA}).")
-        quantita[int(riga["id_articolo"])] += q
-        note_righe[int(riga["id_articolo"])] = testo_breve(riga.get("note"), "note riga", 120)
+        # Il nome prevale sull'id: un id indicato dal modello potrebbe essere inventato.
+        if riga.get("nome"):
+            id_articolo = trova_piatto(conn, riga["nome"])
+        elif riga.get("id_articolo") is not None:
+            id_articolo = int(riga["id_articolo"])
+        else:
+            raise ErroreDominio("PIATTO_MANCANTE", "Ogni riga dell'ordine deve indicare il nome del piatto.")
+        quantita[id_articolo] += q
+        note_righe[id_articolo] = testo_breve(riga.get("note"), "note riga", 120)
 
     articoli: dict[int, sqlite3.Row] = {}
     for id_articolo in quantita:

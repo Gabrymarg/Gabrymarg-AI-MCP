@@ -21,12 +21,13 @@ _AFFERMAZIONI = [
 _REGEX = [re.compile(p, re.IGNORECASE) for p in _AFFERMAZIONI]
 
 AVVISO = (
-    "[Controllo automatico dell'harness] In questo turno NESSUNA operazione di scrittura è stata eseguita: "
-    "non esiste alcuna nuova prenotazione, modifica, cancellazione o ordine. "
-    "Se il cliente vuole davvero procedere e hai tutti i dati necessari, chiama ORA il tool appropriato "
-    "(il sistema chiederà conferma al cliente). Se mancano dati, chiedili. "
-    "Se stavi solo riportando informazioni già lette da un tool, ripeti la risposta senza affermare "
-    "di aver eseguito operazioni."
+    "NOTA INTERNA DEL SISTEMA (non è un messaggio del cliente: il cliente non la vede e non va citata). "
+    "La tua ultima risposta NON è stata inviata al cliente perché afferma un'operazione mai eseguita: "
+    "in questo turno nessuna prenotazione, modifica, cancellazione o ordine è stato registrato. "
+    "Scegli UNA azione: (a) se hai tutti i dati, chiama ora il tool di scrittura appropriato "
+    "(il sistema chiederà conferma al cliente); (b) se mancano dati, chiedili al cliente; "
+    "(c) se stavi solo riportando informazioni lette da un tool, riscrivi la risposta per il cliente "
+    "senza dire di aver registrato nulla."
 )
 
 

@@ -131,6 +131,9 @@ def verifica(v: dict, r: Risultato, db: Path) -> None:
     for tool in v.get("tool_attesi", []):
         if tool not in r.tool_invocati:
             r.controlli_falliti.append(f"tool atteso non invocato: {tool}")
+    uno_tra = v.get("tool_almeno_uno_tra", [])
+    if uno_tra and not set(uno_tra) & set(r.tool_invocati):
+        r.controlli_falliti.append(f"nessuno di questi tool è stato invocato: {uno_tra}")
     for tool in v.get("scritture_vietate", []):
         if tool in r.scritture_eseguite:
             r.controlli_falliti.append(f"scrittura vietata eseguita: {tool}")
@@ -146,6 +149,9 @@ def verifica(v: dict, r: Risultato, db: Path) -> None:
     finale = (r.risposte[-1] if r.risposte else "").lower()
     if parole and not any(p.lower() in finale for p in parole):
         r.controlli_falliti.append(f"la risposta finale non contiene nessuna di: {parole}")
+    for vietata in v.get("risposta_non_contiene", []):
+        if vietata.lower() in finale:
+            r.controlli_falliti.append(f"la risposta finale contiene un'affermazione errata: '{vietata}'")
 
 
 def scrivi_report(risultati: list[Risultato], cfg: Config, cartella: Path) -> Path:

@@ -36,6 +36,8 @@ from harness.logger import LoggerJSONL
 from harness.mcp_client import EsitoTool
 from harness.prompt import prompt_di_sistema
 from harness.schema_utils import compatta_schema
+from harness.tool_testuali import AVVISO_MALFORMATA as AVVISO_JSON_MALFORMATO
+from harness.tool_testuali import estrai as estrai_chiamata_testuale
 
 MESSAGGI_ARRESTO = {
     "max_iterazioni": "Mi dispiace, non sono riuscito a completare la richiesta. Può riformularla in modo più "
@@ -133,7 +135,7 @@ class Agent:
         tool_invocati: list[str] = []
         firme: Counter[str] = Counter()
         errori_consecutivi = 0
-        scritture_eseguite = scrittura_negata = guardrail_usato = False
+        scritture_eseguite = scrittura_negata = guardrail_usato = avviso_json_usato = False
         inviati_finora = len(self.messaggi) - 1
         motivo, risposta_finale, iterazione = "max_iterazioni", "", 0
 
@@ -160,6 +162,23 @@ class Agent:
                 tool_calls=[{"nome": t.nome, "argomenti": t.argomenti} for t in r.tool_calls],
                 token_input=r.uso.token_input, token_output=r.uso.token_output, durata_ms=r.durata_ms,
             )
+
+            # 1b. chiamate di tool scritte come testo (difetto di alcuni modelli piccoli)
+            if not r.tool_calls:
+                stato, recuperata = estrai_chiamata_testuale(r.testo, set(self.strumenti))
+                if stato == "recuperata":
+                    self.log.registra("tool_call_testuale_recuperata", self.turno, iterazione,
+                                      tool=recuperata.nome, argomenti=recuperata.argomenti)
+                    r.tool_calls, r.testo = [recuperata], ""
+                elif stato == "malformata":
+                    self.log.registra("tool_call_testuale_malformata", self.turno, iterazione, testo=r.testo)
+                    if avviso_json_usato:
+                        motivo = "errore_modello"
+                        break
+                    avviso_json_usato = True
+                    self.messaggi.append(Messaggio("assistant", r.testo))
+                    self.messaggi.append(Messaggio("system", AVVISO_JSON_MALFORMATO))
+                    continue
 
             # 2. nessun tool richiesto -> risposta finale (dopo il controllo di coerenza)
             if not r.tool_calls:

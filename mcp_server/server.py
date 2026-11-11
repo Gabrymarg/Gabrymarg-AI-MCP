@@ -58,8 +58,9 @@ mcp = MCPServer(
 )
 
 DESCR_DATA = (
-    "Data AAAA-MM-GG, oppure direttamente le parole dell'utente 'oggi', 'domani', 'dopodomani' "
-    "o il nome del giorno (es. 'sabato'): il sistema le converte nella data corretta."
+    "Data AAAA-MM-GG, oppure direttamente le parole dell'utente: 'oggi', 'domani', 'dopodomani', "
+    "il nome del giorno (es. 'sabato') o giorno e mese (es. '24 dicembre'): il sistema le converte "
+    "nella data corretta."
 )
 
 LETTURA = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False)
@@ -137,11 +138,15 @@ def cerca_menu(
 @mcp.tool(annotations=LETTURA)
 @gestisci_errori
 def dettaglio_piatto(
-    id_articolo: Annotated[int, Field(description="Id del piatto, ottenuto da cerca_menu.")],
+    nome: Annotated[
+        str | None, Field(description="Nome del piatto come lo dice il cliente (es. 'tiramisù', 'carbonara').")
+    ] = None,
+    id_articolo: Annotated[int | None, Field(description="In alternativa al nome: id restituito da cerca_menu.")] = None,
 ) -> DettaglioPiatto:
-    """Restituisce descrizione, ingredienti, allergeni e porzioni ancora disponibili di un piatto."""
+    """Restituisce descrizione, ingredienti, ALLERGENI e porzioni ancora disponibili di un piatto.
+    Indicare il piatto per nome: non indovinare gli id. Usare sempre per domande su allergeni o ingredienti."""
     with connessione() as conn:
-        return DettaglioPiatto(**menu.dettaglio_piatto(conn, id_articolo))
+        return DettaglioPiatto(**menu.dettaglio_piatto(conn, id_articolo, nome))
 
 
 # ============================================================================ prenotazioni
@@ -184,7 +189,8 @@ def crea_prenotazione(
     note: Annotated[str | None, Field(description="Richieste particolari (es. seggiolone).")] = None,
 ) -> Prenotazione:
     """Registra una nuova prenotazione e assegna un tavolo. SCRIVE sui dati.
-    Richiede nome e telefono reali forniti dal cliente: non inventarli."""
+    Controlla da sola la disponibilità: se il cliente ha già dato data, ora, persone, nome e telefono
+    si può chiamare direttamente. Richiede nome e telefono reali forniti dal cliente: non inventarli."""
     with connessione() as conn:
         return Prenotazione(
             **prenotazioni.crea_prenotazione(conn, data, ora, coperti, nome_cliente, telefono, note)
@@ -228,13 +234,17 @@ def cancella_prenotazione(
 def crea_ordine_asporto(
     nome_cliente: Annotated[str, Field(min_length=1, description="Nome del cliente.")],
     telefono: Annotated[str, Field(description="Telefono del cliente.")],
-    righe: Annotated[list[RigaOrdineIn], Field(min_length=1, description="Piatti ordinati (id da cerca_menu).")],
+    righe: Annotated[
+        list[RigaOrdineIn],
+        Field(min_length=1, description="Piatti ordinati, indicati per nome (es. [{'nome': 'carbonara', 'quantita': 2}])."),
+    ],
     ora_ritiro: Annotated[str, Field(description="Ora di ritiro HH:MM.")],
     data_ritiro: Annotated[str | None, Field(description="Data di ritiro; se assente, oggi. " + DESCR_DATA)] = None,
     note: Annotated[str | None, Field(description="Note sull'ordine.")] = None,
 ) -> Ordine:
     """Registra un ordine da asporto e scala le scorte degli ingredienti. SCRIVE sui dati.
-    Fallisce se un piatto non è da asporto, se le scorte non bastano o se l'orario non è valido."""
+    Indicare i piatti per NOME (non serve cercare prima gli id). Fallisce, senza registrare nulla,
+    se un piatto non esiste o è ambiguo, non è da asporto, le scorte non bastano o l'orario non è valido."""
     with connessione() as conn:
         return Ordine(
             **ordini.crea_ordine_asporto(

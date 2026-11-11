@@ -11,6 +11,39 @@ from backend.errori import ErroreDominio
 
 GIORNI_SETTIMANA = ["lunedi", "martedi", "mercoledi", "giovedi", "venerdi", "sabato", "domenica"]
 RELATIVI = {"oggi": 0, "stasera": 0, "domani": 1, "dopodomani": 2}
+MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto",
+        "settembre", "ottobre", "novembre", "dicembre"]
+# Senza anno esplicito: una data passata da al massimo questi giorni resta nell'anno corrente
+# (così "1 dicembre" detto il 3 dicembre risulta nel passato); oltre, si intende l'anno prossimo.
+TOLLERANZA_PASSATO_GIORNI = 31
+
+
+def _data_senza_anno(giorno: int, mese: int, oggi: date) -> date:
+    candidata = date(oggi.year, mese, giorno)
+    if candidata < oggi - timedelta(days=TOLLERANZA_PASSATO_GIORNI):
+        candidata = date(oggi.year + 1, mese, giorno)
+    return candidata
+
+
+def _data_esplicita(parola: str, oggi: date) -> date | None:
+    """'1 dicembre', 'sabato 5 dicembre', '5 dicembre 2026', '5/12', '05/12/2026', '5-12-26'."""
+    parola = re.sub(r"^(" + "|".join(GIORNI_SETTIMANA) + r")\s+", "", parola)
+    parola = re.sub(r"^(il|l')\s*", "", parola)
+    m = re.fullmatch(r"(\d{1,2})\s+(" + "|".join(MESI) + r")(?:\s+(\d{4}))?", parola)
+    if m:
+        giorno, mese, anno = int(m.group(1)), MESI.index(m.group(2)) + 1, m.group(3)
+    else:
+        m = re.fullmatch(r"(\d{1,2})[/\-.](\d{1,2})(?:[/\-.](\d{2}|\d{4}))?", parola)
+        if not m:
+            return None
+        giorno, mese, anno = int(m.group(1)), int(m.group(2)), m.group(3)
+    try:
+        if anno:
+            anno_n = int(anno) + (2000 if len(anno) == 2 else 0)
+            return date(anno_n, mese, giorno)
+        return _data_senza_anno(giorno, mese, oggi)
+    except ValueError:
+        return None
 
 
 def _senza_accenti(testo: str) -> str:
@@ -35,10 +68,14 @@ def parse_data(valore: str) -> date:
             return oggi + timedelta(days=RELATIVI[parola])
         if parola in GIORNI_SETTIMANA:
             return oggi + timedelta(days=(GIORNI_SETTIMANA.index(parola) - oggi.weekday()) % 7)
+        esplicita = _data_esplicita(parola, oggi)
+        if esplicita:
+            return esplicita
     raise ErroreDominio(
         "DATA_NON_VALIDA",
-        f"La data '{valore}' non è valida: usare il formato AAAA-MM-GG (es. 2026-12-24) "
-        "oppure 'oggi', 'domani', 'dopodomani' o il nome del giorno (es. 'sabato').",
+        f"La data '{valore}' non è valida: usare il formato AAAA-MM-GG (es. 2026-12-24), "
+        "il giorno e il mese (es. '24 dicembre') oppure 'oggi', 'domani', 'dopodomani' "
+        "o il nome del giorno (es. 'sabato').",
     )
 
 

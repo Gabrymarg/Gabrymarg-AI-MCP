@@ -7,7 +7,7 @@ Gli esempi sono stati eseguiti realmente su un database di prova (seed 42, orolo
 |---|---|---|
 | `orari_apertura` | lettura | - |
 | `cerca_menu` | lettura | - |
-| `dettaglio_piatto` | lettura | id_articolo |
+| `dettaglio_piatto` | lettura | - |
 | `verifica_disponibilita` | lettura | data, ora, coperti |
 | `trova_prenotazioni` | lettura | - |
 | `crea_prenotazione` | scrittura | data, ora, coperti, nome_cliente, telefono |
@@ -305,7 +305,8 @@ Ogni piatto riporta prezzo, allergeni e disponibilità.
 
 ## `dettaglio_piatto`
 
-Restituisce descrizione, ingredienti, allergeni e porzioni ancora disponibili di un piatto.
+Restituisce descrizione, ingredienti, ALLERGENI e porzioni ancora disponibili di un piatto.
+Indicare il piatto per nome: non indovinare gli id. Usare sempre per domande su allergeni o ingredienti.
 
 **Effetti sui dati:** Sola lettura (`readOnlyHint: true`): nessun effetto sui dati, non richiede conferma.
 
@@ -315,15 +316,33 @@ Restituisce descrizione, ingredienti, allergeni e porzioni ancora disponibili di
 {
   "type": "object",
   "properties": {
+    "nome": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Nome del piatto come lo dice il cliente (es. 'tiramisù', 'carbonara').",
+      "title": "Nome"
+    },
     "id_articolo": {
-      "description": "Id del piatto, ottenuto da cerca_menu.",
-      "title": "Id Articolo",
-      "type": "integer"
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "In alternativa al nome: id restituito da cerca_menu.",
+      "title": "Id Articolo"
     }
   },
-  "required": [
-    "id_articolo"
-  ],
   "title": "dettaglio_piattoArguments"
 }
 ```
@@ -450,7 +469,7 @@ Se non c'è posto propone orari alternativi nello stesso turno. Non registra nul
   "type": "object",
   "properties": {
     "data": {
-      "description": "Data AAAA-MM-GG, oppure direttamente le parole dell'utente 'oggi', 'domani', 'dopodomani' o il nome del giorno (es. 'sabato'): il sistema le converte nella data corretta.",
+      "description": "Data AAAA-MM-GG, oppure direttamente le parole dell'utente: 'oggi', 'domani', 'dopodomani', il nome del giorno (es. 'sabato') o giorno e mese (es. '24 dicembre'): il sistema le converte nella data corretta.",
       "title": "Data",
       "type": "string"
     },
@@ -620,7 +639,7 @@ Cerca le prenotazioni attive (da oggi in poi). Indicare almeno uno tra nome, tel
         }
       ],
       "default": null,
-      "description": "Data AAAA-MM-GG, oppure direttamente le parole dell'utente 'oggi', 'domani', 'dopodomani' o il nome del giorno (es. 'sabato'): il sistema le converte nella data corretta.",
+      "description": "Data AAAA-MM-GG, oppure direttamente le parole dell'utente: 'oggi', 'domani', 'dopodomani', il nome del giorno (es. 'sabato') o giorno e mese (es. '24 dicembre'): il sistema le converte nella data corretta.",
       "title": "Data"
     }
   },
@@ -757,7 +776,8 @@ Cerca le prenotazioni attive (da oggi in poi). Indicare almeno uno tra nome, tel
 ## `crea_prenotazione`
 
 Registra una nuova prenotazione e assegna un tavolo. SCRIVE sui dati.
-Richiede nome e telefono reali forniti dal cliente: non inventarli.
+Controlla da sola la disponibilità: se il cliente ha già dato data, ora, persone, nome e telefono
+si può chiamare direttamente. Richiede nome e telefono reali forniti dal cliente: non inventarli.
 
 **Effetti sui dati:** **Scrittura** (`readOnlyHint: false`): modifica la base dati; l'harness chiede conferma all'utente.
 
@@ -768,7 +788,7 @@ Richiede nome e telefono reali forniti dal cliente: non inventarli.
   "type": "object",
   "properties": {
     "data": {
-      "description": "Data AAAA-MM-GG, oppure direttamente le parole dell'utente 'oggi', 'domani', 'dopodomani' o il nome del giorno (es. 'sabato'): il sistema le converte nella data corretta.",
+      "description": "Data AAAA-MM-GG, oppure direttamente le parole dell'utente: 'oggi', 'domani', 'dopodomani', il nome del giorno (es. 'sabato') o giorno e mese (es. '24 dicembre'): il sistema le converte nella data corretta.",
       "title": "Data",
       "type": "string"
     },
@@ -955,7 +975,7 @@ Indicare solo i campi da cambiare. Se non c'è posto la prenotazione resta invar
         }
       ],
       "default": null,
-      "description": "Nuova data. Data AAAA-MM-GG, oppure direttamente le parole dell'utente 'oggi', 'domani', 'dopodomani' o il nome del giorno (es. 'sabato'): il sistema le converte nella data corretta.",
+      "description": "Nuova data. Data AAAA-MM-GG, oppure direttamente le parole dell'utente: 'oggi', 'domani', 'dopodomani', il nome del giorno (es. 'sabato') o giorno e mese (es. '24 dicembre'): il sistema le converte nella data corretta.",
       "title": "Data"
     },
     "ora": {
@@ -1241,7 +1261,8 @@ Cancella una prenotazione esistente. SCRIVE sui dati e non è annullabile.
 ## `crea_ordine_asporto`
 
 Registra un ordine da asporto e scala le scorte degli ingredienti. SCRIVE sui dati.
-Fallisce se un piatto non è da asporto, se le scorte non bastano o se l'orario non è valido.
+Indicare i piatti per NOME (non serve cercare prima gli id). Fallisce, senza registrare nulla,
+se un piatto non esiste o è ambiguo, non è da asporto, le scorte non bastano o l'orario non è valido.
 
 **Effetti sui dati:** **Scrittura** (`readOnlyHint: false`): modifica la base dati; l'harness chiede conferma all'utente.
 
@@ -1253,10 +1274,31 @@ Fallisce se un piatto non è da asporto, se le scorte non bastano o se l'orario 
   "$defs": {
     "RigaOrdineIn": {
       "properties": {
+        "nome": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Nome del piatto come lo dice il cliente (es. 'carbonara', 'tiramisù').",
+          "title": "Nome"
+        },
         "id_articolo": {
-          "description": "Id del piatto, ottenuto da cerca_menu.",
-          "title": "Id Articolo",
-          "type": "integer"
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "In alternativa al nome: id restituito da cerca_menu.",
+          "title": "Id Articolo"
         },
         "quantita": {
           "default": 1,
@@ -1281,9 +1323,6 @@ Fallisce se un piatto non è da asporto, se le scorte non bastano o se l'orario 
           "title": "Note"
         }
       },
-      "required": [
-        "id_articolo"
-      ],
       "title": "RigaOrdineIn",
       "type": "object"
     }
@@ -1301,7 +1340,7 @@ Fallisce se un piatto non è da asporto, se le scorte non bastano o se l'orario 
       "type": "string"
     },
     "righe": {
-      "description": "Piatti ordinati (id da cerca_menu).",
+      "description": "Piatti ordinati, indicati per nome (es. [{'nome': 'carbonara', 'quantita': 2}]).",
       "items": {
         "$ref": "#/$defs/RigaOrdineIn"
       },
@@ -1324,7 +1363,7 @@ Fallisce se un piatto non è da asporto, se le scorte non bastano o se l'orario 
         }
       ],
       "default": null,
-      "description": "Data di ritiro; se assente, oggi. Data AAAA-MM-GG, oppure direttamente le parole dell'utente 'oggi', 'domani', 'dopodomani' o il nome del giorno (es. 'sabato'): il sistema le converte nella data corretta.",
+      "description": "Data di ritiro; se assente, oggi. Data AAAA-MM-GG, oppure direttamente le parole dell'utente: 'oggi', 'domani', 'dopodomani', il nome del giorno (es. 'sabato') o giorno e mese (es. '24 dicembre'): il sistema le converte nella data corretta.",
       "title": "Data Ritiro"
     },
     "note": {

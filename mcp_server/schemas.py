@@ -6,13 +6,22 @@ outputSchema) pubblicato nella lista dei tool: è il "contratto" tra sistema e a
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class RigaOrdineIn(BaseModel):
-    id_articolo: int = Field(description="Id del piatto, ottenuto da cerca_menu.")
+    nome: str | None = Field(
+        default=None, description="Nome del piatto come lo dice il cliente (es. 'carbonara', 'tiramisù')."
+    )
+    id_articolo: int | None = Field(default=None, description="In alternativa al nome: id restituito da cerca_menu.")
     quantita: int = Field(default=1, ge=1, le=20, description="Numero di porzioni.")
     note: str | None = Field(default=None, max_length=120, description="Richieste particolari sul piatto.")
+
+    @model_validator(mode="after")
+    def nome_o_id(self) -> "RigaOrdineIn":
+        if not self.nome and self.id_articolo is None:
+            raise ValueError("indicare il nome del piatto (campo 'nome')")
+        return self
 
 
 class Piatto(BaseModel):
