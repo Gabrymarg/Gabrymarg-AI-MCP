@@ -1,0 +1,119 @@
+@startuml er
+title Schema della base dati (ER) - Osteria del Borgo
+skinparam shadowing false
+hide circle
+skinparam linetype ortho
+
+entity TAVOLI {
+  * id_tavolo : INTEGER <<PK>>
+  --
+  * nome : TEXT <<UNIQUE>>
+  * n_posti : INTEGER
+  * sala : TEXT
+}
+
+entity ORARI_APERTURA {
+  * giorno_settimana : INTEGER <<PK>>
+  * turno : TEXT <<PK>>
+  --
+  * apertura : TEXT
+  * chiusura : TEXT
+}
+
+entity PRENOTAZIONI {
+  * id_prenotazione : INTEGER <<PK>>
+  --
+  * data : TEXT
+  * ora : TEXT
+  * coperti : INTEGER
+  * nome_cliente : TEXT
+  * telefono : TEXT
+  note : TEXT
+  * stato : TEXT
+  * id_tavolo : INTEGER <<FK>>
+  * fonte : TEXT
+  * creata_il : TEXT
+  modificata_il : TEXT
+}
+
+entity CATEGORIE {
+  * id_categoria : INTEGER <<PK>>
+  --
+  * nome : TEXT <<UNIQUE>>
+  * ordine : INTEGER
+}
+
+entity ARTICOLI {
+  * id_articolo : INTEGER <<PK>>
+  --
+  * nome : TEXT <<UNIQUE>>
+  * descrizione : TEXT
+  * prezzo : REAL
+  * id_categoria : INTEGER <<FK>>
+  * vegetariano : INTEGER
+  * disponibile_asporto : INTEGER
+  * attivo : INTEGER
+}
+
+entity ALLERGENI {
+  * id_allergene : INTEGER <<PK>>
+  --
+  * codice : TEXT <<UNIQUE>>
+  * nome : TEXT
+}
+
+entity ARTICOLI_ALLERGENI {
+  * id_articolo : INTEGER <<PK, FK>>
+  * id_allergene : INTEGER <<PK, FK>>
+}
+
+entity INGREDIENTI {
+  * id_ingrediente : INTEGER <<PK>>
+  --
+  * nome : TEXT <<UNIQUE>>
+  * unita_misura : TEXT
+  * quantita_disponibile : REAL
+  * scorta_minima : REAL
+}
+
+entity ARTICOLI_INGREDIENTI {
+  * id_articolo : INTEGER <<PK, FK>>
+  * id_ingrediente : INTEGER <<PK, FK>>
+  --
+  * quantita : REAL
+}
+
+entity ORDINI {
+  * id_ordine : INTEGER <<PK>>
+  --
+  * nome_cliente : TEXT
+  * telefono : TEXT
+  * tipo_servizio : TEXT
+  * data_ritiro : TEXT
+  * ora_ritiro : TEXT
+  * stato : TEXT
+  * totale : REAL
+  note : TEXT
+  * fonte : TEXT
+  * creato_il : TEXT
+}
+
+entity ORDINI_RIGHE {
+  * id_riga : INTEGER <<PK>>
+  --
+  * id_ordine : INTEGER <<FK>>
+  * id_articolo : INTEGER <<FK>>
+  * quantita : INTEGER
+  * prezzo_unitario : REAL
+  note : TEXT
+}
+
+TAVOLI ||--o{ PRENOTAZIONI : "assegnato a"
+CATEGORIE ||--o{ ARTICOLI : "contiene"
+ARTICOLI ||--o{ ARTICOLI_ALLERGENI
+ALLERGENI ||--o{ ARTICOLI_ALLERGENI
+ARTICOLI ||--o{ ARTICOLI_INGREDIENTI : "ricetta"
+INGREDIENTI ||--o{ ARTICOLI_INGREDIENTI
+ORDINI ||--|{ ORDINI_RIGHE : "composto da"
+ARTICOLI ||--o{ ORDINI_RIGHE
+@enduml

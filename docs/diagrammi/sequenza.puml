@@ -1,0 +1,77 @@
+@startuml sequenza
+title Sequenza di un ciclo agentico completo: prenotazione con conferma
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+autonumber
+
+actor Cliente
+participant "CLI" as CLI
+participant "Agent" as A
+participant "LLMProvider\n(Ollama)" as L
+participant "ClienteMCP" as C
+participant "Server MCP" as S
+database "SQLite" as DB
+participant "LoggerJSONL" as LOG
+
+== Avvio ==
+CLI -> C : connessione stdio (avvio processo server)
+C -> S : initialize
+A -> C : elenco_strumenti()
+C -> S : tools/list
+S --> C : 10 tool (schemi + annotazioni)
+A -> C : chiama("orari_apertura")
+C -> S : tools/call
+S -> DB : SELECT ORARI_APERTURA
+S --> C : data attuale e orari
+A -> A : prompt di sistema\n(data, calendario, orari, regole)
+
+== Turno: "Prenotate per 2 domani alle 20:30, Marco Gallo 340 5551234" ==
+Cliente -> CLI : messaggio
+CLI -> A : esegui_turno(testo)
+A -> LOG : richiesta_utente
+
+loop iterazione <= max_iterazioni
+  A -> L : chat(messaggi, strumenti)
+  L --> A : tool_calls = [verifica_disponibilita(data="domani", ora="20:30", coperti=2)]
+  A -> LOG : risposta_modello (token in/out, durata)
+  A -> A : tool esiste? argomenti validi\n(JSON Schema)?
+  A -> C : chiama(verifica_disponibilita)
+  C -> S : tools/call
+  S -> DB : SELECT prenotazioni del giorno / TAVOLI
+  S --> C : {disponibile: true, data: "2026-12-04"}
+  C --> A : EsitoTool(ok)
+  A -> LOG : chiamata_tool + risultato_tool
+
+  A -> L : chat(messaggi + risultato)
+  L --> A : tool_calls = [crea_prenotazione(...)]
+  A -> A : validazione schema
+  A -> A : spec.scrittura == true\n(readOnlyHint = false)
+  A -> CLI : richiesta di conferma (riepilogo)
+  CLI -> Cliente : "Confermi? [s/N]"
+  Cliente --> CLI : s
+  CLI --> A : approvato
+  A -> LOG : conferma_utente
+  A -> C : chiama(crea_prenotazione)
+  C -> S : tools/call
+  S -> DB : INSERT PRENOTAZIONI (transazione)
+  S --> C : {id_prenotazione: 185, tavolo: "T1", ...}
+  C --> A : EsitoTool(ok)
+  A -> LOG : risultato_tool
+
+  A -> L : chat(messaggi + risultato)
+  L --> A : testo finale (nessun tool)
+  note right of A : condizione di arresto:\nrisposta_finale
+end
+
+A -> LOG : fine_turno (motivo, token totali, durata)
+A --> CLI : EsitoTurno
+CLI --> Cliente : "Prenotazione n. 185 confermata per venerdì 4 dicembre alle 20:30"
+
+note over A
+  Altre condizioni di arresto:
+  max_iterazioni, loop_rilevato (stessa chiamata ripetuta),
+  troppi_errori (errori consecutivi dei tool), errore_modello.
+  Se il cliente nega la conferma il tool NON viene invocato e il
+  modello riceve {"annullato_da_utente": true}.
+end note
+@enduml

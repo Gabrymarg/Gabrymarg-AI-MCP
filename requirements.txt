@@ -1,0 +1,7 @@
+mcp==2.3.0
+ollama==0.6.3
+pydantic==2.14.3
+jsonschema==4.26.0
+Faker==40.54.0
+pytest==9.2.0
+PyYAML==6.0.3

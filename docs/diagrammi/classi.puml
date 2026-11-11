@@ -1,0 +1,208 @@
+@startuml classi
+title Diagramma delle classi - harness agentico e server MCP
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "harness" {
+  class Agent {
+    - llm : LLMProvider
+    - esecutore : EsecutoreTool
+    - conferma : FunzioneConferma
+    - log : LoggerJSONL
+    - cfg : Config
+    - strumenti : dict<str, ToolSpec>
+    - validatori : dict<str, Draft202012Validator>
+    - messaggi : list<Messaggio>
+    - turno : int
+    - uso_sessione : Uso
+    + avvia() <<async>>
+    + esegui_turno(testo : str) : EsitoTurno <<async>>
+    + nuova_conversazione()
+    - _esegui_chiamata(c : ToolCall, iterazione : int) : dict <<async>>
+  }
+
+  class Config {
+    provider : str
+    modello : str
+    max_iterazioni : int = 8
+    max_errori_consecutivi : int = 3
+    max_ripetizioni_chiamata : int = 2
+    timeout_tool_s : float = 15
+    cartella_log : Path
+    comando_server : list<str>
+  }
+
+  class EsitoTurno {
+    risposta : str
+    motivo_arresto : str
+    iterazioni : int
+    uso : Uso
+    chiamate_modello : int
+    tool_invocati : list<str>
+    durata_ms : int
+  }
+
+  interface EsecutoreTool <<Protocol>> {
+    + elenco_strumenti() : list<ToolSpec>
+    + chiama(nome, argomenti, timeout_s) : EsitoTool
+  }
+
+  class ClienteMCP {
+    - parametri : StdioServerParameters
+    - _client : mcp.Client
+    + elenco_strumenti() : list<ToolSpec>
+    + chiama(nome, argomenti, timeout_s) : EsitoTool
+  }
+
+  class EsitoTool {
+    ok : bool
+    contenuto : Any
+    errore : dict
+  }
+
+  class LoggerJSONL {
+    id_sessione : str
+    percorso : Path
+    eventi : list<dict>
+    + registra(tipo, turno, iterazione, **dati) : dict
+    + chiudi()
+  }
+
+  class "confirm" as Conferma <<module>> {
+    + conferma_interattiva(spec, argomenti) : bool
+    + conferma_scriptata(risposte) : FunzioneConferma
+    + riepilogo(spec, argomenti) : str
+  }
+
+  class "guardrail" as Guardrail <<module>> {
+    + afferma_operazione(testo : str) : bool
+    + AVVISO : str
+  }
+
+  class "schema_utils" as SchemaUtils <<module>> {
+    + compatta_schema(schema : dict) : dict
+  }
+
+  class CLI <<module>> {
+    + main()
+  }
+}
+
+package "harness.llm" {
+  abstract class LLMProvider {
+    + nome : str
+    + modello : str
+    + {abstract} chat(messaggi, strumenti) : LLMResponse
+    + descrizione() : str
+  }
+  class OllamaProvider {
+    - client : ollama.Client
+    - opzioni : dict
+    + chat(messaggi, strumenti) : LLMResponse
+  }
+  class OpenAICompatibileProvider {
+    - base_url : str
+    - api_key : str
+    + chat(messaggi, strumenti) : LLMResponse
+  }
+  class MockProvider {
+    - copione : list
+    + chat(messaggi, strumenti) : LLMResponse
+  }
+  class Messaggio {
+    ruolo : str
+    contenuto : str
+    tool_calls : list<ToolCall>
+    tool_call_id : str
+    nome_tool : str
+  }
+  class ToolCall {
+    id : str
+    nome : str
+    argomenti : dict
+  }
+  class ToolSpec {
+    nome : str
+    descrizione : str
+    parametri : JSONSchema
+    scrittura : bool
+    distruttivo : bool
+  }
+  class LLMResponse {
+    testo : str
+    tool_calls : list<ToolCall>
+    uso : Uso
+    modello : str
+    durata_ms : int
+  }
+  class Uso {
+    token_input : int
+    token_output : int
+    totale() : int
+  }
+}
+
+package "mcp_server" {
+  class "server" as Server <<module>> {
+    mcp : MCPServer
+    + orari_apertura() : OrariApertura
+    + cerca_menu(...) : RisultatoMenu
+    + dettaglio_piatto(id_articolo) : DettaglioPiatto
+    + verifica_disponibilita(data, ora, coperti) : Disponibilita
+    + trova_prenotazioni(...) : ElencoPrenotazioni
+    + crea_prenotazione(...) : Prenotazione
+    + modifica_prenotazione(...) : Prenotazione
+    + cancella_prenotazione(id, telefono) : Prenotazione
+    + crea_ordine_asporto(...) : Ordine
+    + stato_ordine(id, telefono) : Ordine
+    - gestisci_errori(fn) <<decorator>>
+  }
+  class "schemas (Pydantic)" as Schemas <<module>> {
+    RisultatoMenu, Piatto, DettaglioPiatto
+    Disponibilita, Prenotazione, ElencoPrenotazioni
+    RigaOrdineIn, Ordine, RigaOrdine, OrariApertura
+  }
+}
+
+package "backend" {
+  class "prenotazioni" as SP <<module>>
+  class "menu" as SM <<module>>
+  class "ordini" as SO <<module>>
+  class ErroreDominio {
+    codice : str
+    messaggio : str
+    dettagli : dict
+  }
+}
+
+LLMProvider <|-- OllamaProvider
+LLMProvider <|-- OpenAICompatibileProvider
+LLMProvider <|-- MockProvider
+EsecutoreTool <|.. ClienteMCP
+
+Agent o--> LLMProvider
+Agent o--> EsecutoreTool
+Agent o--> LoggerJSONL
+Agent --> Config
+Agent ..> Conferma : usa
+Agent ..> Guardrail : verifica risposta
+Agent ..> SchemaUtils : compatta schemi
+Agent ..> EsitoTurno : crea
+Agent "1" *-- "*" Messaggio
+Agent "1" o-- "*" ToolSpec
+Messaggio "1" *-- "*" ToolCall
+LLMResponse *-- Uso
+LLMResponse *-- "*" ToolCall
+LLMProvider ..> LLMResponse : restituisce
+ClienteMCP ..> EsitoTool : restituisce
+ClienteMCP ..> Server : stdio / JSON-RPC (MCP)
+CLI ..> Agent
+Server ..> Schemas
+Server ..> SP
+Server ..> SM
+Server ..> SO
+SP ..> ErroreDominio
+SM ..> ErroreDominio
+SO ..> ErroreDominio
+@enduml

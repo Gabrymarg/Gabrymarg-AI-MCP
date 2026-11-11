@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+data/*.db
+logs/
+.pytest_cache/
+
+# database temporanei degli scenari (report e log invece vanno versionati)
+scenarios/risultati/*/db/
+
+# bozza della tesi: non pubblicarla (verrebbe confrontata da Turnitin con l'elaborato)
+docs/tesi/
