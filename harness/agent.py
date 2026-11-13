@@ -35,9 +35,10 @@ from harness.llm.base import LLMProvider, Messaggio, ToolCall, ToolSpec, Uso
 from harness.logger import LoggerJSONL
 from harness.mcp_client import EsitoTool
 from harness.prompt import prompt_di_sistema
-from harness.schema_utils import compatta_schema
+from harness.schema_utils import compatta_schema, converti_argomenti
 from harness.tool_testuali import AVVISO_MALFORMATA as AVVISO_JSON_MALFORMATO
 from harness.tool_testuali import estrai as estrai_chiamata_testuale
+from harness.tool_testuali import pulisci_risposta
 
 MESSAGGI_ARRESTO = {
     "max_iterazioni": "Mi dispiace, non sono riuscito a completare la richiesta. Può riformularla in modo più "
@@ -164,6 +165,7 @@ class Agent:
             )
 
             # 1b. chiamate di tool scritte come testo (difetto di alcuni modelli piccoli)
+            r.testo = pulisci_risposta(r.testo)
             if not r.tool_calls:
                 stato, recuperata = estrai_chiamata_testuale(r.testo, set(self.strumenti))
                 if stato == "recuperata":
@@ -262,7 +264,12 @@ class Agent:
         if spec is None:
             return errore("TOOL_INESISTENTE", f"Il tool '{nome}' non esiste.", tool_disponibili=sorted(self.strumenti))
 
-        # b. argomenti conformi allo schema?
+        # b. tipi adattati allo schema (es. "2" -> 2), poi argomenti conformi allo schema?
+        convertiti = converti_argomenti(argomenti, self.validatori[nome].schema)
+        if convertiti != argomenti:
+            self.log.registra("argomenti_convertiti", self.turno, iterazione, tool=nome,
+                              originali=argomenti, convertiti=convertiti)
+            argomenti = convertiti
         problemi = sorted(self.validatori[nome].iter_errors(argomenti), key=lambda e: list(e.path))
         if problemi:
             dettagli = [f"{'/'.join(map(str, p.path)) or '(radice)'}: {p.message}" for p in problemi[:5]]

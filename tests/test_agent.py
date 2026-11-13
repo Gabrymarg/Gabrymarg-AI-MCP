@@ -236,6 +236,8 @@ def test_chiamata_testuale_malformata_mai_mostrata_al_cliente(db):
         ('{"name": "cerca_menu", "parameters": {}}', "recuperata"),
         ('{"function": {"name": "cerca_menu", "arguments": "{\\"testo\\": \\"pasta\\"}"}}', "recuperata"),
         ('{"name": "cerca_menu", "parameters": {', "malformata"),
+        ('{"name":"cerca_menu","parameters{"testo":"pasta"}}', "recuperata"),
+        ('{"name":"cerca_menu","parameters":{"testo":"pasta",}}', "recuperata"),
         ('{"name": "tool_sconosciuto", "parameters": {}}', "malformata"),
         ("Certo! Abbiamo la carbonara a 12 euro.", "nessuna"),
     ],
@@ -244,6 +246,29 @@ def test_estrazione_chiamate_testuali(testo, stato):
     from harness.tool_testuali import estrai
 
     assert estrai(testo, {"cerca_menu", "verifica_disponibilita"})[0] == stato
+
+
+def test_prefisso_assistant_rimosso(db):
+    esito, _, _ = esegui([risposta("assistant\n\nBuonasera! Come posso aiutarla?")], "ciao")
+    assert esito.risposta == "Buonasera! Come posso aiutarla?"
+
+
+def test_argomenti_testuali_convertiti_e_eseguiti(db):
+    copione = [
+        risposta("", ("stato_ordine", {"id_ordine": "1", "telefono": "347 111 2233"})),
+        risposta("Il suo ordine è in preparazione."),
+    ]
+    _, agente, _ = esegui(copione, "il mio ordine 1?")
+    assert ultimo_risultato_tool(agente.messaggi)["risultato"]["stato"] == "in_preparazione"
+    assert any(e["tipo"] == "argomenti_convertiti" for e in agente.log.eventi)
+
+
+def test_riepilogo_mostra_giorno_della_settimana():
+    from harness.confirm import riepilogo
+    from harness.llm.base import ToolSpec
+
+    testo = riepilogo(ToolSpec("crea_prenotazione", "", {}, scrittura=True), {"data": "2026-12-11", "ora": "20:00"})
+    assert "2026-12-11 (venerdì)" in testo
 
 
 def test_riepilogo_conferma_mostra_nomi_piatti():

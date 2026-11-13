@@ -52,6 +52,12 @@ python -m harness.cli --modello llama3.2      # stesso codice, altro modello
 python -m harness.cli --verboso               # mostra anche i risultati dei tool
 ```
 
+**Modello in cloud (Groq, piano gratuito).** Copiare `.env.example` in `.env` (escluso da git), inserire la propria `GROQ_API_KEY` e poi:
+
+```bash
+python -m harness.cli --provider groq --modello openai/gpt-oss-120b
+```
+
 Comandi in chat: `/nuova` (nuova conversazione), `/token` (token consumati), `/esci`.
 Prima di ogni operazione che modifica i dati l'assistente mostra un riepilogo e chiede `Confermi? [s/N]`.
 
@@ -61,17 +67,20 @@ Il server MCP si può ispezionare anche da solo, ad esempio con MCP Inspector:
 ### Test
 
 ```bash
-python -m pytest                                        # 79 test, non serve Ollama
+python -m pytest                                        # 98 test, non serve Ollama
 python scenarios/run_scenarios.py --modello qwen2.5:3b  # 16 scenari con il modello reale
 ```
 
-Il runner crea per ogni scenario un database nuovo con l'orologio fissato al 2026-12-03 11:00, così i risultati sono riproducibili. Scrive `report.md`, `risultati.json` e i log JSONL in `scenarios/risultati/<modello>/`.
+Il runner crea per ogni scenario un database nuovo con l'orologio fissato al 2026-12-03 11:00, così i risultati sono riproducibili. Scrive `report.md`, `risultati.json` e i log JSONL in `scenarios/risultati/<modello>/` (non versionata). I risultati ufficiali delle quattro batterie sono archiviati in `docs/iterazioni/`.
+
+I diagrammi UML ed ER sono in `docs/diagrammi/` (sorgenti PlantUML e PNG; `python docs/diagrammi/genera_png.py` li rigenera).
 
 ## Configurazione (variabili d'ambiente)
 
 | Variabile | Predefinito | Significato |
 |---|---|---|
-| `RISTO_LLM_PROVIDER` | `ollama` | `ollama` (API nativa) oppure `openai` (qualsiasi endpoint compatibile) |
+| `RISTO_LLM_PROVIDER` | `ollama` | `ollama` (API nativa), `groq` (cloud) oppure `openai` (qualsiasi endpoint compatibile) |
+| `GROQ_API_KEY` | - | Chiave Groq, da mettere nel file `.env` |
 | `RISTO_MODELLO` | `qwen2.5:3b` | Nome del modello |
 | `RISTO_OPENAI_BASE_URL` / `RISTO_OPENAI_API_KEY` | `http://localhost:11434/v1` | Solo per il provider `openai` |
 | `RISTO_MAX_ITERAZIONI` | `8` | Iterazioni massime del ciclo per ogni messaggio |
@@ -94,6 +103,21 @@ Il runner crea per ogni scenario un database nuovo con l'orologio fissato al 202
 - **Schemi compatti per il modello:** gli schemi inviati al LLM sono semplificati (−28% di caratteri); la validazione usa lo schema completo del server.
 - **Log JSONL:** registra ogni passo (richieste e risposte del modello, tool, parametri, risultati, conferme, token, durate).
 - **Indipendenza dal modello:** il ciclo usa solo l'interfaccia `LLMProvider`. Ci sono un provider Ollama nativo, uno per endpoint compatibili OpenAI e un `MockProvider` per i test.
+
+## Risultati
+
+16 scenari (7 normali, 9 anomali), quattro iterazioni di miglioramento:
+
+| Batteria | qwen2.5:3b (locale) | llama3.2 3B (locale) | gpt-oss-120b (Groq, cloud) |
+|---|---|---|---|
+| 1 - versione base | 10/16 | 9/16 | - |
+| 2 - date e piatti risolti dal back-end | 14/16 | 10/16 | - |
+| 3 - esempi astratti, recupero JSON | 13/16 | 7/16 | - |
+| 4 - conversione tipi, riparazione JSON | 13/16 | - | **16/16** |
+
+- **Nessuna scrittura senza conferma del cliente** in 128 conversazioni. Le 28 chiamate con argomenti non validi sono state fermate dalla validazione prima del server.
+- **Costi medi per scenario:** qwen in locale ~8.100 token e ~58 s; gpt-oss-120b su Groq ~6.500 token e ~15 s (circa 0,001 $ a listino).
+- Report, log JSONL e confronti: `docs/iterazioni/`, `docs/confronto_batterie.md`, `docs/indicatori_sicurezza.py`.
 
 ## Dati
 

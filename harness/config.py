@@ -10,6 +10,21 @@ from pathlib import Path
 RADICE = Path(__file__).resolve().parent.parent
 
 
+def carica_env(percorso: Path = RADICE / ".env") -> None:
+    """Legge le righe CHIAVE=valore del file .env (escluso da git), senza sovrascrivere l'ambiente."""
+    if not percorso.exists():
+        return
+    for riga in percorso.read_text(encoding="utf-8-sig").splitlines():
+        riga = riga.strip()
+        if not riga or riga.startswith("#") or "=" not in riga:
+            continue
+        chiave, valore = riga.split("=", 1)
+        os.environ.setdefault(chiave.strip(), valore.strip().strip('"').strip("'"))
+
+
+carica_env()
+
+
 @dataclass
 class Config:
     provider: str = field(default_factory=lambda: os.environ.get("RISTO_LLM_PROVIDER", "ollama"))

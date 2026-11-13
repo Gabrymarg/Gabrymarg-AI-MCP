@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any, Callable, Iterable
 
 from harness.llm.base import ToolSpec
@@ -17,6 +18,17 @@ ETICHETTE = {
 }
 
 
+GIORNI = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"]
+
+
+def _con_giorno(valore: Any) -> str:
+    """'2026-12-11' -> '2026-12-11 (venerdì)': rende visibile un errore sul giorno a chi conferma."""
+    try:
+        return f"{valore} ({GIORNI[date.fromisoformat(str(valore)).weekday()]})"
+    except ValueError:
+        return str(valore)
+
+
 def riepilogo(spec: ToolSpec, argomenti: dict[str, Any]) -> str:
     righe = [f"{ETICHETTE.get(spec.nome, spec.nome)}:"]
     for chiave, valore in argomenti.items():
@@ -28,7 +40,7 @@ def riepilogo(spec: ToolSpec, argomenti: dict[str, Any]) -> str:
                 righe.append(f"   - {r.get('quantita', 1)} x {piatto}"
                              + (f" ({r['note']})" if r.get("note") else ""))
             continue
-        righe.append(f"   {chiave.replace('_', ' ')}: {valore}")
+        righe.append(f"   {chiave.replace('_', ' ')}: {_con_giorno(valore) if 'data' in chiave else valore}")
     if spec.distruttivo:
         righe.append("   ATTENZIONE: l'operazione non è annullabile.")
     return "\n".join(righe)

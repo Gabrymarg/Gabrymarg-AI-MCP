@@ -29,12 +29,35 @@ class OpenAICompatibileProvider(LLMProvider):
         api_key: str | None = None,
         temperatura: float = 0.0,
         timeout: float = 120.0,
+        max_tentativi: int = 6,
     ):
         super().__init__(modello)
         self.base_url = (base_url or os.environ.get("RISTO_OPENAI_BASE_URL", "http://localhost:11434/v1")).rstrip("/")
         self.api_key = api_key or os.environ.get("RISTO_OPENAI_API_KEY", "ollama")
         self.temperatura = temperatura
+        self.max_tentativi = max_tentativi
+        self.attese_limite = 0  # quante volte si è atteso per i limiti di frequenza
         self.http = httpx.Client(timeout=timeout)
+
+    def _post_con_riprova(self, corpo: dict[str, Any]) -> httpx.Response:
+        """Gestisce i limiti dei piani gratuiti: su 429/5xx attende (Retry-After se presente) e riprova."""
+        for tentativo in range(self.max_tentativi):
+            r = self.http.post(
+                f"{self.base_url}/chat/completions", json=corpo, headers={"Authorization": f"Bearer {self.api_key}"}
+            )
+            if r.status_code not in (429, 500, 502, 503) or tentativo == self.max_tentativi - 1:
+                break
+            attesa = r.headers.get("retry-after")
+            try:
+                secondi = min(float(attesa), 60.0) if attesa else 2.0 * 2**tentativo
+            except ValueError:
+                secondi = 2.0 * 2**tentativo
+            self.attese_limite += 1
+            time.sleep(secondi)
+        if r.status_code >= 400:
+            # Il messaggio d'errore del fornitore (mai la chiave) aiuta a capire limiti e modelli non validi.
+            raise RuntimeError(f"HTTP {r.status_code} da {self.base_url}: {r.text[:300]}")
+        return r
 
     @staticmethod
     def _converti_messaggio(m: Messaggio) -> dict[str, Any]:
@@ -60,10 +83,7 @@ class OpenAICompatibileProvider(LLMProvider):
                 for t in strumenti
             ]
         inizio = time.perf_counter()
-        r = self.http.post(
-            f"{self.base_url}/chat/completions", json=corpo, headers={"Authorization": f"Bearer {self.api_key}"}
-        )
-        r.raise_for_status()
+        r = self._post_con_riprova(corpo)
         dati = r.json()
         msg = dati["choices"][0]["message"]
         chiamate = []
@@ -81,3 +101,18 @@ class OpenAICompatibileProvider(LLMProvider):
             modello=dati.get("model", self.modello),
             durata_ms=int((time.perf_counter() - inizio) * 1000),
         )
+
+
+class GroqProvider(OpenAICompatibileProvider):
+    """Groq (https://console.groq.com): servizio cloud con piano gratuito e API compatibile OpenAI.
+
+    Chiave letta da GROQ_API_KEY (es. nel file .env, escluso da git).
+    """
+
+    nome = "groq"
+
+    def __init__(self, modello: str, **opzioni: Any):
+        chiave = os.environ.get("GROQ_API_KEY")
+        if not chiave:
+            raise RuntimeError("Variabile GROQ_API_KEY mancante: aggiungerla al file .env (vedi .env.example).")
+        super().__init__(modello, base_url="https://api.groq.com/openai/v1", api_key=chiave, **opzioni)

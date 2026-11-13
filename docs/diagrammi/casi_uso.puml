@@ -1,58 +1,70 @@
 @startuml casi_uso
 title Osteria del Borgo - Diagramma dei casi d'uso dell'assistente
-left to right direction
-skinparam packageStyle rectangle
 skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam usecase {
+  BackgroundColor #F7F7F7
+}
+left to right direction
 
 actor Cliente
-actor "Modello linguistico\n(Ollama)" as LLM <<sistema>>
-actor "Personale di sala" as Staff
+actor "Personale\ndi sala" as Staff
+actor "Modello linguistico\n(locale o cloud)" as LLM <<sistema>>
 
-rectangle "Assistente virtuale (harness + server MCP)" {
-  usecase "Consultare il menu" as UC1
-  usecase "Filtrare per allergeni\n/ vegetariano" as UC2
-  usecase "Vedere dettaglio piatto" as UC3
-  usecase "Verificare disponibilità" as UC4
-  usecase "Prenotare un tavolo" as UC5
-  usecase "Cercare le proprie\nprenotazioni" as UC6
-  usecase "Modificare una\nprenotazione" as UC7
-  usecase "Cancellare una\nprenotazione" as UC8
-  usecase "Ordinare da asporto" as UC9
-  usecase "Conoscere lo stato\ndi un ordine" as UC10
-  usecase "Confermare un'operazione\ndi scrittura" as UCC
-  usecase "Verificare identità\n(telefono)" as UCV
-  usecase "Controllare le scorte" as UCS
+rectangle "Assistente virtuale Osteria del Borgo  (harness agentico + server MCP)" {
+  package "Menu" {
+    usecase "Consultare il menu" as M1
+    usecase "Filtrare per allergeni\no vegetariano" as M2
+    usecase "Vedere dettaglio piatto\n(ingredienti, allergeni)" as M3
+  }
+  package "Prenotazioni" {
+    usecase "Verificare\ndisponibilità" as P1
+    usecase "Prenotare un tavolo" as P2
+    usecase "Cercare le proprie\nprenotazioni" as P3
+    usecase "Modificare una\nprenotazione" as P4
+    usecase "Cancellare una\nprenotazione" as P5
+  }
+  package "Asporto" {
+    usecase "Ordinare da asporto" as O1
+    usecase "Conoscere lo stato\ndi un ordine" as O2
+  }
+  package "Controlli trasversali" {
+    usecase "Confermare l'operazione\n(human-in-the-loop)" as C1
+    usecase "Verificare l'identità\n(telefono)" as C2
+    usecase "Controllare le scorte" as C3
+  }
 }
 
-Cliente --> UC1
-Cliente --> UC4
-Cliente --> UC5
-Cliente --> UC6
-Cliente --> UC7
-Cliente --> UC8
-Cliente --> UC9
-Cliente --> UC10
+Cliente --> M1
+Cliente --> P1
+Cliente --> P2
+Cliente --> P3
+Cliente --> P4
+Cliente --> P5
+Cliente --> O1
+Cliente --> O2
 
-UC2 .> UC1 : <<extend>>
-UC3 .> UC1 : <<extend>>
-UC5 .> UC4 : <<include>>
-UC5 .> UCC : <<include>>
-UC7 .> UCC : <<include>>
-UC8 .> UCC : <<include>>
-UC9 .> UCC : <<include>>
-UC7 .> UCV : <<include>>
-UC8 .> UCV : <<include>>
-UC10 .> UCV : <<include>>
-UC9 .> UCS : <<include>>
+M2 .> M1 : <<extend>>
+M3 .> M1 : <<extend>>
 
-LLM -- UC1
-LLM -- UC5
-LLM -- UC9
+P2 ..> C1 : <<include>>
+P4 ..> C1 : <<include>>
+P5 ..> C1 : <<include>>
+O1 ..> C1 : <<include>>
+P4 ..> C2 : <<include>>
+P5 ..> C2 : <<include>>
+O2 ..> C2 : <<include>>
+O1 ..> C3 : <<include>>
 
-Staff --> UC6 : consulta i dati\nregistrati
-note right of UCC
-  Human-in-the-loop: ogni tool con
-  readOnlyHint = false richiede
-  la conferma esplicita del cliente.
+Staff --> P3
+
+M1 -- LLM
+P2 -- LLM
+O1 -- LLM
+
+note right of C1
+  Richiesta per ogni tool con
+  readOnlyHint = false: il cliente
+  vede un riepilogo e conferma [s/N].
 end note
 @enduml

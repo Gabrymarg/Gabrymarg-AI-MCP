@@ -29,6 +29,18 @@ AVVISO_MALFORMATA = (
 )
 
 
+def pulisci_risposta(testo: str) -> str:
+    """Rimuove il nome di ruolo ("assistant") che alcuni modelli lasciano trapelare all'inizio del testo."""
+    return re.sub(r"^\s*(assistant|assistente)\s*:?\s*\n+", "", testo or "", flags=re.IGNORECASE)
+
+
+def _ripara_json(testo: str) -> str:
+    """Corregge errori di sintassi ricorrenti nei JSON scritti dai modelli piccoli."""
+    testo = re.sub(r'"(parameters|arguments)"?\s*\{', r'"\1":{', testo)  # "parameters{  ->  "parameters":{
+    testo = re.sub(r",\s*([}\]])", r"\1", testo)  # virgole finali
+    return testo
+
+
 def _ripulisci(testo: str) -> str:
     testo = testo.strip()
     recinto = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", testo, flags=re.S)
@@ -46,7 +58,10 @@ def estrai(testo: str, nomi_tool: set[str]) -> tuple[Stato, ToolCall | None]:
     try:
         dati: Any = json.loads(pulito)
     except json.JSONDecodeError:
-        return "malformata", None
+        try:
+            dati = json.loads(_ripara_json(pulito))
+        except json.JSONDecodeError:
+            return "malformata", None
     if isinstance(dati, dict) and isinstance(dati.get("function"), dict):
         dati = dati["function"]
     if not isinstance(dati, dict):

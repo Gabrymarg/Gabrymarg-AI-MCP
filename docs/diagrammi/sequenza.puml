@@ -7,7 +7,7 @@ autonumber
 actor Cliente
 participant "CLI" as CLI
 participant "Agent" as A
-participant "LLMProvider\n(Ollama)" as L
+participant "LLMProvider\n(Ollama / Groq)" as L
 participant "ClienteMCP" as C
 participant "Server MCP" as S
 database "SQLite" as DB

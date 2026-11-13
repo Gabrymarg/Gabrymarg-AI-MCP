@@ -97,7 +97,7 @@ def main() -> None:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="Assistente virtuale di Osteria del Borgo")
-    parser.add_argument("--provider", choices=["ollama", "openai"])
+    parser.add_argument("--provider", choices=["ollama", "openai", "groq"])
     parser.add_argument("--modello")
     parser.add_argument("--verboso", action="store_true", help="mostra anche i risultati dei tool")
     sys.exit(asyncio.run(main_async(parser.parse_args())))

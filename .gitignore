@@ -1,12 +1,13 @@
 .venv/
+.env
 __pycache__/
 *.pyc
 data/*.db
 logs/
 .pytest_cache/
 
-# database temporanei degli scenari (report e log invece vanno versionati)
-scenarios/risultati/*/db/
+# risultati di lavoro degli scenari: quelli ufficiali sono archiviati in docs/iterazioni/
+scenarios/risultati/
 
 # bozza della tesi: non pubblicarla (verrebbe confrontata da Turnitin con l'elaborato)
 docs/tesi/

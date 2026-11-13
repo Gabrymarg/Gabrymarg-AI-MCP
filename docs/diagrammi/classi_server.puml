@@ -1,0 +1,86 @@
+@startuml classi_server
+title Diagramma delle classi (2/2) - server MCP e back-end
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+hide empty members
+allowmixing
+
+package "mcp_server" <<Rectangle>> {
+  class server <<module>> {
+    mcp : MCPServer
+    .. tool di lettura (readOnlyHint = true) ..
+    + orari_apertura() : OrariApertura
+    + cerca_menu(testo, categoria, escludi_allergeni, ...) : RisultatoMenu
+    + dettaglio_piatto(nome, id_articolo) : DettaglioPiatto
+    + verifica_disponibilita(data, ora, coperti) : Disponibilita
+    + trova_prenotazioni(nome, telefono, data) : ElencoPrenotazioni
+    + stato_ordine(id_ordine, telefono) : Ordine
+    .. tool di scrittura (readOnlyHint = false) ..
+    + crea_prenotazione(...) : Prenotazione
+    + modifica_prenotazione(...) : Prenotazione
+    + cancella_prenotazione(id, telefono) : Prenotazione <<destructive>>
+    + crea_ordine_asporto(...) : Ordine
+    .. ..
+    - gestisci_errori(fn) <<decorator>>
+  }
+  class schemas <<module, Pydantic>> {
+    RisultatoMenu, Piatto, DettaglioPiatto
+    Disponibilita, Prenotazione, ElencoPrenotazioni
+    RigaOrdineIn, Ordine, RigaOrdine, OrariApertura
+  }
+}
+
+package "backend" <<Rectangle>> {
+  class prenotazioni <<module>> {
+    + verifica_disponibilita(conn, data, ora, coperti)
+    + crea_prenotazione(conn, ...)
+    + trova_prenotazioni(conn, ...)
+    + modifica_prenotazione(conn, ...)
+    + cancella_prenotazione(conn, id, telefono)
+  }
+  class menu <<module>> {
+    + cerca_menu(conn, ...)
+    + dettaglio_piatto(conn, id_articolo, nome)
+    + trova_piatto(conn, nome) : int
+    + porzioni_disponibili(conn, id) : int
+  }
+  class ordini <<module>> {
+    + crea_ordine_asporto(conn, ...)
+    + stato_ordine(conn, id, telefono)
+  }
+  class validazione <<module>> {
+    + parse_data(valore) : date
+    + parse_ora(valore) : time
+    + normalizza_telefono(valore) : str
+  }
+  class clock <<module>> {
+    + adesso() : datetime
+  }
+  class db <<module>> {
+    + connessione() : Connection
+  }
+  class ErroreDominio {
+    codice : str
+    messaggio : str
+    dettagli : dict
+  }
+}
+
+database "SQLite\n(risto.db)" as DB
+
+server ..> schemas
+server ..> prenotazioni
+server ..> menu
+server ..> ordini
+server ..> db
+server ..> ErroreDominio : converte in ToolError
+prenotazioni ..> validazione
+ordini ..> validazione
+ordini ..> menu
+prenotazioni ..> clock
+ordini ..> clock
+prenotazioni ..> ErroreDominio
+menu ..> ErroreDominio
+ordini ..> ErroreDominio
+db --> DB
+@enduml
