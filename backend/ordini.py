@@ -19,6 +19,7 @@ from backend import clock
 from backend.errori import ErroreDominio
 from backend.menu import porzioni_disponibili, trova_piatto
 from backend.orari import descrizione_orari, turni_del_giorno
+from backend.permessi import OSPITE, Utente
 from backend.validazione import (
     nome_cliente,
     normalizza_telefono,
@@ -83,15 +84,20 @@ def _verifica_ritiro(conn: sqlite3.Connection, giorno: date, ora) -> None:
 
 def crea_ordine_asporto(
     conn: sqlite3.Connection,
-    nome: str,
-    telefono: str,
+    nome: str | None,
+    telefono: str | None,
     righe: list[dict[str, Any]],
     ora_ritiro: str,
     data_ritiro: str | None = None,
     note: str | None = None,
     fonte: str = "agente",
+    utente: Utente = OSPITE,
 ) -> dict[str, Any]:
-    nome = nome_cliente(nome)
+    if utente.cliente_registrato:
+        nome, telefono = nome or utente.nome, telefono or utente.telefono
+    nome = nome_cliente(nome or "")
+    if not telefono:
+        raise ErroreDominio("TELEFONO_MANCANTE", "Il numero di telefono del cliente è obbligatorio.")
     tel = normalizza_telefono(telefono)
     note = testo_breve(note, "note", 300)
     giorno = parse_data(data_ritiro) if data_ritiro else clock.adesso().date()
@@ -165,8 +171,9 @@ def crea_ordine_asporto(
 
     totale = sum(articoli[ida]["prezzo"] * q for ida, q in quantita.items())
     cur = conn.execute(
-        """INSERT INTO ORDINI (nome_cliente, telefono, data_ritiro, ora_ritiro, stato, totale, note, fonte, creato_il)
-           VALUES (?, ?, ?, ?, 'ricevuto', ?, ?, ?, ?)""",
+        """INSERT INTO ORDINI (nome_cliente, telefono, data_ritiro, ora_ritiro, stato, totale, note, fonte,
+                              id_utente, creato_il)
+           VALUES (?, ?, ?, ?, 'ricevuto', ?, ?, ?, ?, ?)""",
         (
             nome,
             tel,
@@ -175,6 +182,7 @@ def crea_ordine_asporto(
             round(totale, 2),
             note,
             fonte,
+            utente.id_utente if utente.cliente_registrato else None,
             clock.adesso().isoformat(timespec="minutes"),
         ),
     )
@@ -192,10 +200,63 @@ def crea_ordine_asporto(
     return _riepilogo(conn, id_ordine)
 
 
-def stato_ordine(conn: sqlite3.Connection, id_ordine: int, telefono: str) -> dict[str, Any]:
-    o = conn.execute("SELECT telefono FROM ORDINI WHERE id_ordine = ?", (id_ordine,)).fetchone()
-    if o is None or not stesso_telefono(o["telefono"], telefono):
+def stato_ordine(
+    conn: sqlite3.Connection, id_ordine: int, telefono: str | None = None, utente: Utente = OSPITE
+) -> dict[str, Any]:
+    o = conn.execute("SELECT telefono, id_utente FROM ORDINI WHERE id_ordine = ?", (id_ordine,)).fetchone()
+    if o is None:
+        autorizzato = False
+    elif utente.personale:
+        autorizzato = True
+    elif utente.cliente_registrato:
+        autorizzato = o["id_utente"] == utente.id_utente
+    else:
+        autorizzato = bool(telefono) and stesso_telefono(o["telefono"], telefono)
+    if not autorizzato:
         raise ErroreDominio(
-            "ORDINE_INESISTENTE", f"Non esiste nessun ordine numero {id_ordine} associato a questo telefono."
+            "ORDINE_INESISTENTE",
+            f"Non esiste nessun ordine numero {id_ordine} "
+            + ("tra i suoi ordini." if utente.cliente_registrato else "associato a questo telefono."),
         )
+    return _riepilogo(conn, id_ordine)
+
+
+# Transizioni di stato ammesse per un ordine (uso della cucina e della sala).
+TRANSIZIONI = {
+    "ricevuto": {"in_preparazione", "annullato"},
+    "in_preparazione": {"pronto", "annullato"},
+    "pronto": {"ritirato"},
+    "ritirato": set(),
+    "annullato": set(),
+}
+
+
+def ordini_da_preparare(conn: sqlite3.Connection, data: str | None = None) -> dict[str, Any]:
+    """Ordini ancora da evadere (ricevuti, in preparazione o pronti) per una data, in ordine di ritiro."""
+    giorno = parse_data(data) if data else clock.adesso().date()
+    ids = [
+        r[0]
+        for r in conn.execute(
+            """SELECT id_ordine FROM ORDINI WHERE data_ritiro = ?
+               AND stato IN ('ricevuto', 'in_preparazione', 'pronto') ORDER BY ora_ritiro, id_ordine""",
+            (giorno.isoformat(),),
+        )
+    ]
+    return {"data": giorno.isoformat(), "numero_ordini": len(ids), "ordini": [_riepilogo(conn, i) for i in ids]}
+
+
+def aggiorna_stato_ordine(conn: sqlite3.Connection, id_ordine: int, nuovo_stato: str) -> dict[str, Any]:
+    o = conn.execute("SELECT stato FROM ORDINI WHERE id_ordine = ?", (id_ordine,)).fetchone()
+    if o is None:
+        raise ErroreDominio("ORDINE_INESISTENTE", f"Non esiste nessun ordine numero {id_ordine}.")
+    if nuovo_stato not in TRANSIZIONI:
+        raise ErroreDominio("STATO_NON_VALIDO", f"Stato '{nuovo_stato}' non valido.",
+                            {"stati_validi": sorted(TRANSIZIONI)})
+    if nuovo_stato not in TRANSIZIONI[o["stato"]]:
+        raise ErroreDominio(
+            "TRANSIZIONE_NON_AMMESSA",
+            f"Un ordine '{o['stato']}' non può passare a '{nuovo_stato}'.",
+            {"stati_ammessi": sorted(TRANSIZIONI[o["stato"]])},
+        )
+    conn.execute("UPDATE ORDINI SET stato = ? WHERE id_ordine = ?", (nuovo_stato, id_ordine))
     return _riepilogo(conn, id_ordine)

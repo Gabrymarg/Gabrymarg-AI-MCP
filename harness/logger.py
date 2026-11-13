@@ -10,7 +10,7 @@ import json
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 
 class LoggerJSONL:
@@ -21,6 +21,8 @@ class LoggerJSONL:
         self.percorso = cartella / f"{prefisso}_{momento}_{self.id_sessione}.jsonl"
         self._file = self.percorso.open("a", encoding="utf-8")
         self.eventi: list[dict[str, Any]] = []  # copia in memoria, utile a test e report
+        # Funzioni chiamate a ogni evento (es. la web app che mostra il ciclo agentico in tempo reale).
+        self.ascoltatori: list[Callable[[dict[str, Any]], None]] = []
 
     def registra(self, tipo: str, turno: int, iterazione: int | None = None, **dati: Any) -> dict[str, Any]:
         evento = {
@@ -34,6 +36,8 @@ class LoggerJSONL:
         self.eventi.append(evento)
         self._file.write(json.dumps(evento, ensure_ascii=False, default=str) + "\n")
         self._file.flush()
+        for ascoltatore in self.ascoltatori:
+            ascoltatore(evento)
         return evento
 
     def chiudi(self) -> None:
@@ -47,10 +51,13 @@ class LoggerNullo(LoggerJSONL):
         self.id_sessione = "test"
         self.percorso = None
         self.eventi = []
+        self.ascoltatori = []
 
     def registra(self, tipo: str, turno: int, iterazione: int | None = None, **dati: Any) -> dict[str, Any]:
         evento = {"turno": turno, "iterazione": iterazione, "tipo": tipo, **dati}
         self.eventi.append(evento)
+        for ascoltatore in self.ascoltatori:
+            ascoltatore(evento)
         return evento
 
     def chiudi(self) -> None:

@@ -15,6 +15,9 @@ ETICHETTE = {
     "modifica_prenotazione": "Modifica della prenotazione",
     "cancella_prenotazione": "CANCELLAZIONE della prenotazione",
     "crea_ordine_asporto": "Nuovo ordine da asporto",
+    "aggiorna_stato_ordine": "Cambio di stato dell'ordine",
+    "aggiorna_scorta": "Aggiornamento del magazzino",
+    "imposta_disponibilita_piatto": "Disponibilità del piatto nel menu",
 }
 
 

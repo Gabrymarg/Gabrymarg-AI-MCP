@@ -1,20 +1,129 @@
 # Documentazione dei tool MCP
 
 Generata automaticamente da `docs/genera_doc_tool.py` interrogando il server (`tools/list`).
-Gli esempi sono stati eseguiti realmente su un database di prova (seed 42, orologio fissato a 2026-12-03T11:00).
+Gli esempi sono stati eseguiti realmente via HTTP, come amministratore, su un database di prova (seed 42, orologio fissato a 2026-12-03T11:00). I ruoli autorizzati provengono da `backend/permessi.py` e sono verificati dal server a ogni chiamata.
 
-| Tool | Effetti | Parametri obbligatori |
-|---|---|---|
-| `orari_apertura` | lettura | - |
-| `cerca_menu` | lettura | - |
-| `dettaglio_piatto` | lettura | - |
-| `verifica_disponibilita` | lettura | data, ora, coperti |
-| `trova_prenotazioni` | lettura | - |
-| `crea_prenotazione` | scrittura | data, ora, coperti, nome_cliente, telefono |
-| `modifica_prenotazione` | scrittura | id_prenotazione, telefono |
-| `cancella_prenotazione` | scrittura distruttiva | id_prenotazione, telefono |
-| `crea_ordine_asporto` | scrittura | nome_cliente, telefono, righe, ora_ritiro |
-| `stato_ordine` | lettura | id_ordine, telefono |
+| Tool | Effetti | Ruoli autorizzati | Parametri obbligatori |
+|---|---|---|---|
+| `mio_profilo` | lettura | ospite, cliente, sala, cucina, admin | - |
+| `orari_apertura` | lettura | ospite, cliente, sala, cucina, admin | - |
+| `cerca_menu` | lettura | ospite, cliente, sala, cucina, admin | - |
+| `dettaglio_piatto` | lettura | ospite, cliente, sala, cucina, admin | - |
+| `verifica_disponibilita` | lettura | ospite, cliente, sala, cucina, admin | data, ora, coperti |
+| `orari_disponibili` | lettura | ospite, cliente, sala, cucina, admin | data, coperti |
+| `trova_prenotazioni` | lettura | ospite, cliente, sala, admin | - |
+| `crea_prenotazione` | scrittura | ospite, cliente, sala, admin | data, ora, coperti |
+| `modifica_prenotazione` | scrittura | ospite, cliente, sala, admin | id_prenotazione |
+| `cancella_prenotazione` | scrittura distruttiva | ospite, cliente, sala, admin | id_prenotazione |
+| `prenotazioni_del_giorno` | lettura | sala, admin | data |
+| `crea_ordine_asporto` | scrittura | ospite, cliente, sala, admin | righe, ora_ritiro |
+| `stato_ordine` | lettura | ospite, cliente, sala, cucina, admin | id_ordine |
+| `ordini_da_preparare` | lettura | sala, cucina, admin | - |
+| `aggiorna_stato_ordine` | scrittura | sala, cucina, admin | id_ordine, nuovo_stato |
+| `aggiorna_scorta` | scrittura | admin | ingrediente, quantita |
+| `imposta_disponibilita_piatto` | scrittura | admin | nome, disponibile |
+
+## `mio_profilo`
+
+Restituisce il ruolo e il nome dell'utente con cui si sta parlando e i tool che può usare.
+Il ruolo deriva dall'accesso effettuato, non da quanto dichiarato nella conversazione.
+
+**Effetti sui dati:** Sola lettura (`readOnlyHint: true`): nessun effetto sui dati, non richiede conferma.
+
+**Ruoli autorizzati:** ospite, cliente, sala, cucina, admin.
+
+**Schema dei parametri di ingresso:**
+
+```json
+{
+  "type": "object",
+  "properties": {},
+  "title": "mio_profiloArguments"
+}
+```
+
+**Schema di uscita:**
+
+```json
+{
+  "properties": {
+    "ruolo": {
+      "description": "ospite | cliente | sala | cucina | admin",
+      "title": "Ruolo",
+      "type": "string"
+    },
+    "descrizione_ruolo": {
+      "title": "Descrizione Ruolo",
+      "type": "string"
+    },
+    "nome": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Nome dell'utente autenticato (assente per gli ospiti).",
+      "title": "Nome"
+    },
+    "tool_consentiti": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Tool Consentiti",
+      "type": "array"
+    }
+  },
+  "required": [
+    "ruolo",
+    "descrizione_ruolo",
+    "tool_consentiti"
+  ],
+  "title": "Profilo",
+  "type": "object"
+}
+```
+
+**Esempio di invocazione:**
+
+```json
+{
+  "name": "mio_profilo",
+  "arguments": {}
+}
+```
+
+**Risultato:**
+
+```json
+{
+  "ruolo": "admin",
+  "descrizione_ruolo": "Amministratore",
+  "nome": "Amministratore",
+  "tool_consentiti": [
+    "aggiorna_scorta",
+    "aggiorna_stato_ordine",
+    "cancella_prenotazione",
+    "cerca_menu",
+    "crea_ordine_asporto",
+    "crea_prenotazione",
+    "dettaglio_piatto",
+    "imposta_disponibilita_piatto",
+    "mio_profilo",
+    "modifica_prenotazione",
+    "orari_apertura",
+    "orari_disponibili",
+    "ordini_da_preparare",
+    "prenotazioni_del_giorno",
+    "stato_ordine",
+    "trova_prenotazioni",
+    "verifica_disponibilita"
+  ]
+}
+```
 
 ## `orari_apertura`
 
@@ -22,6 +131,8 @@ Restituisce la data e l'ora attuali e gli orari di apertura del ristorante per o
 Usare per domande sugli orari o per sapere che giorno è oggi.
 
 **Effetti sui dati:** Sola lettura (`readOnlyHint: true`): nessun effetto sui dati, non richiede conferma.
+
+**Ruoli autorizzati:** ospite, cliente, sala, cucina, admin.
 
 **Schema dei parametri di ingresso:**
 
@@ -93,6 +204,8 @@ Cerca i piatti del menu con filtri opzionali. Senza filtri restituisce l'intero 
 Ogni piatto riporta prezzo, allergeni e disponibilità.
 
 **Effetti sui dati:** Sola lettura (`readOnlyHint: true`): nessun effetto sui dati, non richiede conferma.
+
+**Ruoli autorizzati:** ospite, cliente, sala, cucina, admin.
 
 **Schema dei parametri di ingresso:**
 
@@ -310,6 +423,8 @@ Indicare il piatto per nome: non indovinare gli id. Usare sempre per domande su 
 
 **Effetti sui dati:** Sola lettura (`readOnlyHint: true`): nessun effetto sui dati, non richiede conferma.
 
+**Ruoli autorizzati:** ospite, cliente, sala, cucina, admin.
+
 **Schema dei parametri di ingresso:**
 
 ```json
@@ -423,7 +538,7 @@ Indicare il piatto per nome: non indovinare gli id. Usare sempre per domande su 
 {
   "name": "dettaglio_piatto",
   "arguments": {
-    "id_articolo": 13
+    "nome": "tagliolini al tartufo"
   }
 }
 ```
@@ -461,6 +576,8 @@ Verifica se c'è un tavolo libero per data, ora e numero di persone indicati.
 Se non c'è posto propone orari alternativi nello stesso turno. Non registra nulla.
 
 **Effetti sui dati:** Sola lettura (`readOnlyHint: true`): nessun effetto sui dati, non richiede conferma.
+
+**Ruoli autorizzati:** ospite, cliente, sala, cucina, admin.
 
 **Schema dei parametri di ingresso:**
 
@@ -591,11 +708,137 @@ Se non c'è posto propone orari alternativi nello stesso turno. Non registra nul
 }
 ```
 
-## `trova_prenotazioni`
+## `orari_disponibili`
 
-Cerca le prenotazioni attive (da oggi in poi). Indicare almeno uno tra nome, telefono e data.
+Elenca TUTTI gli orari della giornata (pranzo e cena, ogni 30 minuti) in cui c'è un tavolo libero
+per il numero di persone indicato. Usare quando il cliente chiede quali orari sono disponibili o
+vuole alternative, invece di provare un orario alla volta. Non registra nulla.
 
 **Effetti sui dati:** Sola lettura (`readOnlyHint: true`): nessun effetto sui dati, non richiede conferma.
+
+**Ruoli autorizzati:** ospite, cliente, sala, cucina, admin.
+
+**Schema dei parametri di ingresso:**
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "data": {
+      "description": "Data AAAA-MM-GG, oppure direttamente le parole dell'utente: 'oggi', 'domani', 'dopodomani', il nome del giorno (es. 'sabato') o giorno e mese (es. '24 dicembre'): il sistema le converte nella data corretta.",
+      "title": "Data",
+      "type": "string"
+    },
+    "coperti": {
+      "description": "Numero di persone.",
+      "minimum": 1,
+      "title": "Coperti",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "data",
+    "coperti"
+  ],
+  "title": "orari_disponibiliArguments"
+}
+```
+
+**Schema di uscita:**
+
+```json
+{
+  "properties": {
+    "data": {
+      "title": "Data",
+      "type": "string"
+    },
+    "coperti": {
+      "title": "Coperti",
+      "type": "integer"
+    },
+    "chiuso": {
+      "description": "True se il ristorante quel giorno è chiuso.",
+      "title": "Chiuso",
+      "type": "boolean"
+    },
+    "turni": {
+      "additionalProperties": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "description": "Per ogni turno ('pranzo', 'cena') gli orari HH:MM con tavolo libero.",
+      "title": "Turni",
+      "type": "object"
+    },
+    "messaggio": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Messaggio"
+    }
+  },
+  "required": [
+    "data",
+    "coperti",
+    "chiuso",
+    "turni"
+  ],
+  "title": "OrariDisponibili",
+  "type": "object"
+}
+```
+
+**Esempio di invocazione:**
+
+```json
+{
+  "name": "orari_disponibili",
+  "arguments": {
+    "data": "sabato",
+    "coperti": 4
+  }
+}
+```
+
+**Risultato:**
+
+```json
+{
+  "data": "2026-12-05",
+  "coperti": 4,
+  "chiuso": false,
+  "turni": {
+    "pranzo": [
+      "12:00",
+      "12:30",
+      "13:00",
+      "13:30"
+    ],
+    "cena": [
+      "22:00"
+    ]
+  },
+  "messaggio": null
+}
+```
+
+## `trova_prenotazioni`
+
+Cerca le prenotazioni attive (da oggi in poi). Un cliente registrato vede solo le proprie, anche senza filtri;
+negli altri casi indicare almeno uno tra nome, telefono e data.
+
+**Effetti sui dati:** Sola lettura (`readOnlyHint: true`): nessun effetto sui dati, non richiede conferma.
+
+**Ruoli autorizzati:** ospite, cliente, sala, admin.
 
 **Schema dei parametri di ingresso:**
 
@@ -776,10 +1019,12 @@ Cerca le prenotazioni attive (da oggi in poi). Indicare almeno uno tra nome, tel
 ## `crea_prenotazione`
 
 Registra una nuova prenotazione e assegna un tavolo. SCRIVE sui dati.
-Controlla da sola la disponibilità: se il cliente ha già dato data, ora, persone, nome e telefono
-si può chiamare direttamente. Richiede nome e telefono reali forniti dal cliente: non inventarli.
+Controlla da sola la disponibilità. Per un ospite servono nome e telefono reali forniti dal cliente
+(non inventarli); per un cliente registrato si usano i dati del suo profilo.
 
 **Effetti sui dati:** **Scrittura** (`readOnlyHint: false`): modifica la base dati; l'harness chiede conferma all'utente.
+
+**Ruoli autorizzati:** ospite, cliente, sala, admin.
 
 **Schema dei parametri di ingresso:**
 
@@ -804,15 +1049,30 @@ si può chiamare direttamente. Richiede nome e telefono reali forniti dal client
       "type": "integer"
     },
     "nome_cliente": {
-      "description": "Nome e cognome del cliente.",
-      "minLength": 1,
-      "title": "Nome Cliente",
-      "type": "string"
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Nome e cognome del cliente (non serve per i clienti registrati).",
+      "title": "Nome Cliente"
     },
     "telefono": {
-      "description": "Telefono del cliente.",
-      "title": "Telefono",
-      "type": "string"
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Telefono del cliente (non serve per i clienti registrati).",
+      "title": "Telefono"
     },
     "note": {
       "anyOf": [
@@ -831,9 +1091,7 @@ si può chiamare direttamente. Richiede nome e telefono reali forniti dal client
   "required": [
     "data",
     "ora",
-    "coperti",
-    "nome_cliente",
-    "telefono"
+    "coperti"
   ],
   "title": "crea_prenotazioneArguments"
 }
@@ -949,6 +1207,8 @@ Indicare solo i campi da cambiare. Se non c'è posto la prenotazione resta invar
 
 **Effetti sui dati:** **Scrittura** (`readOnlyHint: false`): modifica la base dati; l'harness chiede conferma all'utente.
 
+**Ruoli autorizzati:** ospite, cliente, sala, admin.
+
 **Schema dei parametri di ingresso:**
 
 ```json
@@ -961,9 +1221,17 @@ Indicare solo i campi da cambiare. Se non c'è posto la prenotazione resta invar
       "type": "integer"
     },
     "telefono": {
-      "description": "Telefono usato per la prenotazione (verifica dell'identità).",
-      "title": "Telefono",
-      "type": "string"
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Telefono usato per la prenotazione o l'ordine (verifica dell'identità). Non serve per i clienti registrati né per il personale.",
+      "title": "Telefono"
     },
     "data": {
       "anyOf": [
@@ -1020,8 +1288,7 @@ Indicare solo i campi da cambiare. Se non c'è posto la prenotazione resta invar
     }
   },
   "required": [
-    "id_prenotazione",
-    "telefono"
+    "id_prenotazione"
   ],
   "title": "modifica_prenotazioneArguments"
 }
@@ -1104,7 +1371,6 @@ Indicare solo i campi da cambiare. Se non c'è posto la prenotazione resta invar
   "name": "modifica_prenotazione",
   "arguments": {
     "id_prenotazione": 86,
-    "telefono": "3331234567",
     "ora": "21:00",
     "coperti": 4
   }
@@ -1134,6 +1400,8 @@ Cancella una prenotazione esistente. SCRIVE sui dati e non è annullabile.
 
 **Effetti sui dati:** **Scrittura** (`readOnlyHint: false`): modifica la base dati; l'harness chiede conferma all'utente. **Distruttivo** (`destructiveHint: true`): l'operazione non è annullabile.
 
+**Ruoli autorizzati:** ospite, cliente, sala, admin.
+
 **Schema dei parametri di ingresso:**
 
 ```json
@@ -1146,14 +1414,21 @@ Cancella una prenotazione esistente. SCRIVE sui dati e non è annullabile.
       "type": "integer"
     },
     "telefono": {
-      "description": "Telefono usato per la prenotazione (verifica dell'identità).",
-      "title": "Telefono",
-      "type": "string"
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Telefono usato per la prenotazione o l'ordine (verifica dell'identità). Non serve per i clienti registrati né per il personale.",
+      "title": "Telefono"
     }
   },
   "required": [
-    "id_prenotazione",
-    "telefono"
+    "id_prenotazione"
   ],
   "title": "cancella_prenotazioneArguments"
 }
@@ -1235,8 +1510,7 @@ Cancella una prenotazione esistente. SCRIVE sui dati e non è annullabile.
 {
   "name": "cancella_prenotazione",
   "arguments": {
-    "id_prenotazione": 86,
-    "telefono": "3331234567"
+    "id_prenotazione": 86
   }
 }
 ```
@@ -1258,6 +1532,202 @@ Cancella una prenotazione esistente. SCRIVE sui dati e non è annullabile.
 }
 ```
 
+## `prenotazioni_del_giorno`
+
+Quadro della sala per una data: tutte le prenotazioni attive con tavolo e coperti per turno.
+Riservato al personale di sala e all'amministratore.
+
+**Effetti sui dati:** Sola lettura (`readOnlyHint: true`): nessun effetto sui dati, non richiede conferma.
+
+**Ruoli autorizzati:** sala, admin.
+
+**Schema dei parametri di ingresso:**
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "data": {
+      "description": "Data AAAA-MM-GG, oppure direttamente le parole dell'utente: 'oggi', 'domani', 'dopodomani', il nome del giorno (es. 'sabato') o giorno e mese (es. '24 dicembre'): il sistema le converte nella data corretta.",
+      "title": "Data",
+      "type": "string"
+    }
+  },
+  "required": [
+    "data"
+  ],
+  "title": "prenotazioni_del_giornoArguments"
+}
+```
+
+**Schema di uscita:**
+
+```json
+{
+  "$defs": {
+    "Prenotazione": {
+      "properties": {
+        "id_prenotazione": {
+          "title": "Id Prenotazione",
+          "type": "integer"
+        },
+        "data": {
+          "title": "Data",
+          "type": "string"
+        },
+        "ora": {
+          "title": "Ora",
+          "type": "string"
+        },
+        "coperti": {
+          "title": "Coperti",
+          "type": "integer"
+        },
+        "nome_cliente": {
+          "title": "Nome Cliente",
+          "type": "string"
+        },
+        "telefono": {
+          "title": "Telefono",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Note"
+        },
+        "stato": {
+          "title": "Stato",
+          "type": "string"
+        },
+        "tavolo": {
+          "title": "Tavolo",
+          "type": "string"
+        },
+        "sala": {
+          "title": "Sala",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id_prenotazione",
+        "data",
+        "ora",
+        "coperti",
+        "nome_cliente",
+        "telefono",
+        "note",
+        "stato",
+        "tavolo",
+        "sala"
+      ],
+      "title": "Prenotazione",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "data": {
+      "title": "Data",
+      "type": "string"
+    },
+    "numero_prenotazioni": {
+      "title": "Numero Prenotazioni",
+      "type": "integer"
+    },
+    "coperti_pranzo": {
+      "title": "Coperti Pranzo",
+      "type": "integer"
+    },
+    "coperti_cena": {
+      "title": "Coperti Cena",
+      "type": "integer"
+    },
+    "prenotazioni": {
+      "items": {
+        "$ref": "#/$defs/Prenotazione"
+      },
+      "title": "Prenotazioni",
+      "type": "array"
+    }
+  },
+  "required": [
+    "data",
+    "numero_prenotazioni",
+    "coperti_pranzo",
+    "coperti_cena",
+    "prenotazioni"
+  ],
+  "title": "QuadroSala",
+  "type": "object"
+}
+```
+
+**Esempio di invocazione:**
+
+```json
+{
+  "name": "prenotazioni_del_giorno",
+  "arguments": {
+    "data": "domani"
+  }
+}
+```
+
+**Risultato:**
+
+```json
+{
+  "data": "2026-12-04",
+  "numero_prenotazioni": 3,
+  "coperti_pranzo": 0,
+  "coperti_cena": 9,
+  "prenotazioni": [
+    {
+      "id_prenotazione": 185,
+      "data": "2026-12-04",
+      "ora": "20:30",
+      "coperti": 2,
+      "nome_cliente": "Marco Gallo",
+      "telefono": "3405551234",
+      "note": "Tavolo tranquillo",
+      "stato": "confermata",
+      "tavolo": "T2",
+      "sala": "Sala interna"
+    },
+    {
+      "id_prenotazione": 88,
+      "data": "2026-12-04",
+      "ora": "20:30",
+      "coperti": 5,
+      "nome_cliente": "Sandro Tedesco",
+      "telefono": "3578091343",
+      "note": "Compleanno",
+      "stato": "confermata",
+      "tavolo": "V3",
+      "sala": "Veranda"
+    },
+    {
+      "id_prenotazione": 87,
+      "data": "2026-12-04",
+      "ora": "21:30",
+      "coperti": 2,
+      "nome_cliente": "Luca Bettoni",
+      "telefono": "3262174596",
+      "note": "Compleanno",
+      "stato": "confermata",
+      "tavolo": "T1",
+      "sala": "Sala interna"
+    }
+  ]
+}
+```
+
 ## `crea_ordine_asporto`
 
 Registra un ordine da asporto e scala le scorte degli ingredienti. SCRIVE sui dati.
@@ -1265,6 +1735,8 @@ Indicare i piatti per NOME (non serve cercare prima gli id). Fallisce, senza reg
 se un piatto non esiste o è ambiguo, non è da asporto, le scorte non bastano o l'orario non è valido.
 
 **Effetti sui dati:** **Scrittura** (`readOnlyHint: false`): modifica la base dati; l'harness chiede conferma all'utente.
+
+**Ruoli autorizzati:** ospite, cliente, sala, admin.
 
 **Schema dei parametri di ingresso:**
 
@@ -1328,17 +1800,6 @@ se un piatto non esiste o è ambiguo, non è da asporto, le scorte non bastano o
     }
   },
   "properties": {
-    "nome_cliente": {
-      "description": "Nome del cliente.",
-      "minLength": 1,
-      "title": "Nome Cliente",
-      "type": "string"
-    },
-    "telefono": {
-      "description": "Telefono del cliente.",
-      "title": "Telefono",
-      "type": "string"
-    },
     "righe": {
       "description": "Piatti ordinati, indicati per nome (es. [{'nome': 'carbonara', 'quantita': 2}]).",
       "items": {
@@ -1352,6 +1813,32 @@ se un piatto non esiste o è ambiguo, non è da asporto, le scorte non bastano o
       "description": "Ora di ritiro HH:MM.",
       "title": "Ora Ritiro",
       "type": "string"
+    },
+    "nome_cliente": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Nome del cliente (non serve per i clienti registrati).",
+      "title": "Nome Cliente"
+    },
+    "telefono": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Telefono del cliente (non serve per i clienti registrati).",
+      "title": "Telefono"
     },
     "data_ritiro": {
       "anyOf": [
@@ -1381,8 +1868,6 @@ se un piatto non esiste o è ambiguo, non è da asporto, le scorte non bastano o
     }
   },
   "required": [
-    "nome_cliente",
-    "telefono",
     "righe",
     "ora_ritiro"
   ],
@@ -1507,11 +1992,11 @@ se un piatto non esiste o è ambiguo, non è da asporto, le scorte non bastano o
     "ora_ritiro": "20:30",
     "righe": [
       {
-        "id_articolo": 10,
+        "nome": "carbonara",
         "quantita": 2
       },
       {
-        "id_articolo": 35,
+        "nome": "tiramisù",
         "quantita": 1
       }
     ]
@@ -1555,6 +2040,8 @@ Restituisce stato, orario di ritiro e contenuto di un ordine da asporto.
 
 **Effetti sui dati:** Sola lettura (`readOnlyHint: true`): nessun effetto sui dati, non richiede conferma.
 
+**Ruoli autorizzati:** ospite, cliente, sala, cucina, admin.
+
 **Schema dei parametri di ingresso:**
 
 ```json
@@ -1567,14 +2054,21 @@ Restituisce stato, orario di ritiro e contenuto di un ordine da asporto.
       "type": "integer"
     },
     "telefono": {
-      "description": "Telefono usato per l'ordine (verifica dell'identità).",
-      "title": "Telefono",
-      "type": "string"
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Telefono usato per la prenotazione o l'ordine (verifica dell'identità). Non serve per i clienti registrati né per il personale.",
+      "title": "Telefono"
     }
   },
   "required": [
-    "id_ordine",
-    "telefono"
+    "id_ordine"
   ],
   "title": "stato_ordineArguments"
 }
@@ -1692,8 +2186,7 @@ Restituisce stato, orario di ritiro e contenuto di un ordine da asporto.
 {
   "name": "stato_ordine",
   "arguments": {
-    "id_ordine": 1,
-    "telefono": "347 111 2233"
+    "id_ordine": 1
   }
 }
 ```
@@ -1725,5 +2218,618 @@ Restituisce stato, orario di ritiro e contenuto di un ordine da asporto.
       "note": null
     }
   ]
+}
+```
+
+## `ordini_da_preparare`
+
+Elenco degli ordini da asporto ancora da evadere (ricevuti, in preparazione, pronti), in ordine di ritiro.
+Riservato a cucina, sala e amministratore.
+
+**Effetti sui dati:** Sola lettura (`readOnlyHint: true`): nessun effetto sui dati, non richiede conferma.
+
+**Ruoli autorizzati:** sala, cucina, admin.
+
+**Schema dei parametri di ingresso:**
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "data": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Data di ritiro; se assente, oggi. Data AAAA-MM-GG, oppure direttamente le parole dell'utente: 'oggi', 'domani', 'dopodomani', il nome del giorno (es. 'sabato') o giorno e mese (es. '24 dicembre'): il sistema le converte nella data corretta.",
+      "title": "Data"
+    }
+  },
+  "title": "ordini_da_preparareArguments"
+}
+```
+
+**Schema di uscita:**
+
+```json
+{
+  "$defs": {
+    "Ordine": {
+      "properties": {
+        "id_ordine": {
+          "title": "Id Ordine",
+          "type": "integer"
+        },
+        "nome_cliente": {
+          "title": "Nome Cliente",
+          "type": "string"
+        },
+        "data_ritiro": {
+          "title": "Data Ritiro",
+          "type": "string"
+        },
+        "ora_ritiro": {
+          "title": "Ora Ritiro",
+          "type": "string"
+        },
+        "stato": {
+          "description": "ricevuto | in_preparazione | pronto | ritirato | annullato",
+          "title": "Stato",
+          "type": "string"
+        },
+        "totale": {
+          "title": "Totale",
+          "type": "number"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Note"
+        },
+        "righe": {
+          "items": {
+            "$ref": "#/$defs/RigaOrdine"
+          },
+          "title": "Righe",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id_ordine",
+        "nome_cliente",
+        "data_ritiro",
+        "ora_ritiro",
+        "stato",
+        "totale",
+        "note",
+        "righe"
+      ],
+      "title": "Ordine",
+      "type": "object"
+    },
+    "RigaOrdine": {
+      "properties": {
+        "id_articolo": {
+          "title": "Id Articolo",
+          "type": "integer"
+        },
+        "nome": {
+          "title": "Nome",
+          "type": "string"
+        },
+        "quantita": {
+          "title": "Quantita",
+          "type": "integer"
+        },
+        "prezzo_unitario": {
+          "title": "Prezzo Unitario",
+          "type": "number"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Note"
+        }
+      },
+      "required": [
+        "id_articolo",
+        "nome",
+        "quantita",
+        "prezzo_unitario",
+        "note"
+      ],
+      "title": "RigaOrdine",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "data": {
+      "title": "Data",
+      "type": "string"
+    },
+    "numero_ordini": {
+      "title": "Numero Ordini",
+      "type": "integer"
+    },
+    "ordini": {
+      "items": {
+        "$ref": "#/$defs/Ordine"
+      },
+      "title": "Ordini",
+      "type": "array"
+    }
+  },
+  "required": [
+    "data",
+    "numero_ordini",
+    "ordini"
+  ],
+  "title": "ElencoOrdini",
+  "type": "object"
+}
+```
+
+**Esempio di invocazione:**
+
+```json
+{
+  "name": "ordini_da_preparare",
+  "arguments": {}
+}
+```
+
+**Risultato:**
+
+```json
+{
+  "data": "2026-12-03",
+  "numero_ordini": 2,
+  "ordini": [
+    {
+      "id_ordine": 1,
+      "nome_cliente": "Luca Bianchi",
+      "data_ritiro": "2026-12-03",
+      "ora_ritiro": "20:00",
+      "stato": "in_preparazione",
+      "totale": 40.0,
+      "note": null,
+      "righe": [
+        {
+          "id_articolo": 18,
+          "nome": "Lasagne alla bolognese",
+          "quantita": 2,
+          "prezzo_unitario": 13.0,
+          "note": null
+        },
+        {
+          "id_articolo": 35,
+          "nome": "Tiramisù",
+          "quantita": 2,
+          "prezzo_unitario": 7.0,
+          "note": null
+        }
+      ]
+    },
+    {
+      "id_ordine": 2,
+      "nome_cliente": "Paolo Riva",
+      "data_ritiro": "2026-12-03",
+      "ora_ritiro": "20:30",
+      "stato": "ricevuto",
+      "totale": 31.0,
+      "note": null,
+      "righe": [
+        {
+          "id_articolo": 10,
+          "nome": "Spaghetti alla carbonara",
+          "quantita": 2,
+          "prezzo_unitario": 12.0,
+          "note": null
+        },
+        {
+          "id_articolo": 35,
+          "nome": "Tiramisù",
+          "quantita": 1,
+          "prezzo_unitario": 7.0,
+          "note": null
+        }
+      ]
+    }
+  ]
+}
+```
+
+## `aggiorna_stato_ordine`
+
+Aggiorna lo stato di un ordine da asporto (es. da 'in_preparazione' a 'pronto'). SCRIVE sui dati.
+Sono ammesse solo le transizioni coerenti. Riservato a cucina, sala e amministratore.
+
+**Effetti sui dati:** **Scrittura** (`readOnlyHint: false`): modifica la base dati; l'harness chiede conferma all'utente.
+
+**Ruoli autorizzati:** sala, cucina, admin.
+
+**Schema dei parametri di ingresso:**
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "id_ordine": {
+      "description": "Numero dell'ordine.",
+      "title": "Id Ordine",
+      "type": "integer"
+    },
+    "nuovo_stato": {
+      "description": "Nuovo stato: in_preparazione, pronto, ritirato o annullato.",
+      "enum": [
+        "in_preparazione",
+        "pronto",
+        "ritirato",
+        "annullato"
+      ],
+      "title": "Nuovo Stato",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id_ordine",
+    "nuovo_stato"
+  ],
+  "title": "aggiorna_stato_ordineArguments"
+}
+```
+
+**Schema di uscita:**
+
+```json
+{
+  "$defs": {
+    "RigaOrdine": {
+      "properties": {
+        "id_articolo": {
+          "title": "Id Articolo",
+          "type": "integer"
+        },
+        "nome": {
+          "title": "Nome",
+          "type": "string"
+        },
+        "quantita": {
+          "title": "Quantita",
+          "type": "integer"
+        },
+        "prezzo_unitario": {
+          "title": "Prezzo Unitario",
+          "type": "number"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Note"
+        }
+      },
+      "required": [
+        "id_articolo",
+        "nome",
+        "quantita",
+        "prezzo_unitario",
+        "note"
+      ],
+      "title": "RigaOrdine",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "id_ordine": {
+      "title": "Id Ordine",
+      "type": "integer"
+    },
+    "nome_cliente": {
+      "title": "Nome Cliente",
+      "type": "string"
+    },
+    "data_ritiro": {
+      "title": "Data Ritiro",
+      "type": "string"
+    },
+    "ora_ritiro": {
+      "title": "Ora Ritiro",
+      "type": "string"
+    },
+    "stato": {
+      "description": "ricevuto | in_preparazione | pronto | ritirato | annullato",
+      "title": "Stato",
+      "type": "string"
+    },
+    "totale": {
+      "title": "Totale",
+      "type": "number"
+    },
+    "note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Note"
+    },
+    "righe": {
+      "items": {
+        "$ref": "#/$defs/RigaOrdine"
+      },
+      "title": "Righe",
+      "type": "array"
+    }
+  },
+  "required": [
+    "id_ordine",
+    "nome_cliente",
+    "data_ritiro",
+    "ora_ritiro",
+    "stato",
+    "totale",
+    "note",
+    "righe"
+  ],
+  "title": "Ordine",
+  "type": "object"
+}
+```
+
+**Esempio di invocazione:**
+
+```json
+{
+  "name": "aggiorna_stato_ordine",
+  "arguments": {
+    "id_ordine": 1,
+    "nuovo_stato": "pronto"
+  }
+}
+```
+
+**Risultato:**
+
+```json
+{
+  "id_ordine": 1,
+  "nome_cliente": "Luca Bianchi",
+  "data_ritiro": "2026-12-03",
+  "ora_ritiro": "20:00",
+  "stato": "pronto",
+  "totale": 40.0,
+  "note": null,
+  "righe": [
+    {
+      "id_articolo": 18,
+      "nome": "Lasagne alla bolognese",
+      "quantita": 2,
+      "prezzo_unitario": 13.0,
+      "note": null
+    },
+    {
+      "id_articolo": 35,
+      "nome": "Tiramisù",
+      "quantita": 2,
+      "prezzo_unitario": 7.0,
+      "note": null
+    }
+  ]
+}
+```
+
+## `aggiorna_scorta`
+
+Aggiorna la giacenza di un ingrediente in magazzino. SCRIVE sui dati. Riservato all'amministratore.
+
+**Effetti sui dati:** **Scrittura** (`readOnlyHint: false`): modifica la base dati; l'harness chiede conferma all'utente.
+
+**Ruoli autorizzati:** admin.
+
+**Schema dei parametri di ingresso:**
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "ingrediente": {
+      "description": "Nome dell'ingrediente (es. 'tartufo nero').",
+      "title": "Ingrediente",
+      "type": "string"
+    },
+    "quantita": {
+      "description": "Quantità nell'unità di misura dell'ingrediente (g, ml, pz).",
+      "minimum": 0,
+      "title": "Quantita",
+      "type": "number"
+    },
+    "modalita": {
+      "default": "aggiungi",
+      "description": "'aggiungi' per un carico di merce, 'imposta' per correggere la giacenza dopo un inventario.",
+      "enum": [
+        "aggiungi",
+        "imposta"
+      ],
+      "title": "Modalita",
+      "type": "string"
+    }
+  },
+  "required": [
+    "ingrediente",
+    "quantita"
+  ],
+  "title": "aggiorna_scortaArguments"
+}
+```
+
+**Schema di uscita:**
+
+```json
+{
+  "properties": {
+    "ingrediente": {
+      "title": "Ingrediente",
+      "type": "string"
+    },
+    "unita_misura": {
+      "title": "Unita Misura",
+      "type": "string"
+    },
+    "quantita_precedente": {
+      "title": "Quantita Precedente",
+      "type": "number"
+    },
+    "quantita_attuale": {
+      "title": "Quantita Attuale",
+      "type": "number"
+    },
+    "sotto_scorta_minima": {
+      "title": "Sotto Scorta Minima",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "ingrediente",
+    "unita_misura",
+    "quantita_precedente",
+    "quantita_attuale",
+    "sotto_scorta_minima"
+  ],
+  "title": "EsitoScorta",
+  "type": "object"
+}
+```
+
+**Esempio di invocazione:**
+
+```json
+{
+  "name": "aggiorna_scorta",
+  "arguments": {
+    "ingrediente": "tartufo nero",
+    "quantita": 200,
+    "modalita": "aggiungi"
+  }
+}
+```
+
+**Risultato:**
+
+```json
+{
+  "ingrediente": "tartufo nero",
+  "unita_misura": "g",
+  "quantita_precedente": 25.0,
+  "quantita_attuale": 225.0,
+  "sotto_scorta_minima": false
+}
+```
+
+## `imposta_disponibilita_piatto`
+
+Toglie o rimette un piatto nel menu. SCRIVE sui dati. Riservato all'amministratore.
+
+**Effetti sui dati:** **Scrittura** (`readOnlyHint: false`): modifica la base dati; l'harness chiede conferma all'utente.
+
+**Ruoli autorizzati:** admin.
+
+**Schema dei parametri di ingresso:**
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "nome": {
+      "description": "Nome del piatto.",
+      "title": "Nome",
+      "type": "string"
+    },
+    "disponibile": {
+      "description": "True per rimetterlo nel menu, False per toglierlo.",
+      "title": "Disponibile",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "nome",
+    "disponibile"
+  ],
+  "title": "imposta_disponibilita_piattoArguments"
+}
+```
+
+**Schema di uscita:**
+
+```json
+{
+  "properties": {
+    "id_articolo": {
+      "title": "Id Articolo",
+      "type": "integer"
+    },
+    "nome": {
+      "title": "Nome",
+      "type": "string"
+    },
+    "nel_menu": {
+      "title": "Nel Menu",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "id_articolo",
+    "nome",
+    "nel_menu"
+  ],
+  "title": "DisponibilitaPiatto",
+  "type": "object"
+}
+```
+
+**Esempio di invocazione:**
+
+```json
+{
+  "name": "imposta_disponibilita_piatto",
+  "arguments": {
+    "nome": "branzino al forno",
+    "disponibile": false
+  }
+}
+```
+
+**Risultato:**
+
+```json
+{
+  "id_articolo": 23,
+  "nome": "Branzino al forno con patate",
+  "nel_menu": false
 }
 ```

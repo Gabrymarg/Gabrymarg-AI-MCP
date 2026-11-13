@@ -271,6 +271,39 @@ def test_riepilogo_mostra_giorno_della_settimana():
     assert "2026-12-11 (venerdì)" in testo
 
 
+def test_risultati_dei_turni_precedenti_accorciati(db):
+    """Il menu completo letto al turno 1 non viene rinviato per intero al modello nel turno 2."""
+    cfg = Config(max_caratteri_risultati_storici=200)
+    llm = MockProvider([
+        risposta("", ("cerca_menu", {})),
+        risposta("Ecco il menu."),
+        risposta("Il tiramisù costa 7 euro."),
+    ])
+
+    async def corpo():
+        async with ClienteMCP(cfg.comando_server, cfg.cartella_server) as cliente:
+            agente = Agent(llm, cliente, conferma_scriptata([]), LoggerNullo(), cfg)
+            await agente.avvia()
+            await agente.esegui_turno("cosa avete nel menu?")
+            await agente.esegui_turno("quanto costa il tiramisù?")
+            return agente
+
+    agente = asyncio.run(corpo())
+    risultato_turno1 = [m for m in llm.chiamate[1] if m.ruolo == "tool"][-1].contenuto  # turno 1: integro
+    inviato_turno2 = [m for m in llm.chiamate[2] if m.ruolo == "tool"][-1].contenuto  # turno 2: accorciato
+    assert len(risultato_turno1) > 2000
+    assert len(inviato_turno2) < 400 and "accorciato" in inviato_turno2
+    assert len([m for m in agente.messaggi if m.ruolo == "tool"][-1].contenuto) == len(risultato_turno1)
+
+
+def test_contesto_troppo_lungo_messaggio_chiaro(db):
+    def troppo(_m):
+        raise RuntimeError("HTTP 413 da https://api.groq.com: Request too large")
+
+    esito, _, _ = esegui([troppo], "ciao")
+    assert esito.motivo_arresto == "contesto_troppo_lungo" and "nuova conversazione" in esito.risposta
+
+
 def test_riepilogo_conferma_mostra_nomi_piatti():
     from harness.confirm import riepilogo
     from harness.llm.base import ToolSpec

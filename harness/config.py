@@ -34,6 +34,11 @@ class Config:
     max_ripetizioni_chiamata: int = 2  # stessa chiamata (nome + argomenti) ripetuta più volte = loop
     # Respinge (una volta per turno) le risposte che affermano operazioni non eseguite.
     guardrail_coerenza: bool = field(default_factory=lambda: os.environ.get("RISTO_GUARDRAIL", "1") != "0")
+    # Gestione del contesto: i risultati dei tool dei turni PRECEDENTI vengono accorciati a questo numero
+    # di caratteri prima di essere rinviati al modello (il log e la cronologia interna restano completi).
+    max_caratteri_risultati_storici: int = field(
+        default_factory=lambda: int(os.environ.get("RISTO_MAX_RISULTATI_STORICI", "400"))
+    )
     timeout_tool_s: float = field(default_factory=lambda: float(os.environ.get("RISTO_TIMEOUT_TOOL", "15")))
     cartella_log: Path = field(default_factory=lambda: Path(os.environ.get("RISTO_LOG_DIR", RADICE / "logs")))
     # Comando che avvia il server MCP (trasporto stdio).

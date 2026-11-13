@@ -12,6 +12,8 @@ from typing import Any
 
 import anyio
 from mcp import Client, StdioServerParameters
+from mcp.client.streamable_http import streamable_http_client
+from mcp.shared._httpx_utils import create_mcp_http_client
 
 from harness.llm.base import ToolSpec
 
@@ -45,17 +47,44 @@ def _interpreta_errore(testo: str) -> dict[str, Any]:
 
 
 class ClienteMCP:
-    def __init__(self, comando: list[str], cartella: Path, env: dict[str, str] | None = None):
-        self.parametri = StdioServerParameters(
-            command=comando[0], args=comando[1:], cwd=str(cartella), env={**os.environ, **(env or {})}
-        )
+    """Connessione al server MCP.
+
+    - stdio (comando + cartella): avvia il server come processo figlio, senza autenticazione;
+    - HTTP (url + token): si collega a un server già in esecuzione, presentando il token dell'utente
+      in ogni richiesta (Authorization: Bearer ...). La cache delle risposte del client è disattivata,
+      perché le risposte dipendono dall'utente e non devono essere condivise.
+    """
+
+    def __init__(
+        self,
+        comando: list[str] | None = None,
+        cartella: Path | None = None,
+        env: dict[str, str] | None = None,
+        url: str | None = None,
+        token: str | None = None,
+    ):
+        self.url, self.token = url, token
+        self.parametri = None
+        if url is None:
+            if comando is None or cartella is None:
+                raise ValueError("Indicare comando e cartella (stdio) oppure url e token (HTTP).")
+            self.parametri = StdioServerParameters(
+                command=comando[0], args=comando[1:], cwd=str(cartella), env={**os.environ, **(env or {})}
+            )
         self._stack: AsyncExitStack | None = None
         self._client: Client | None = None
+
+    def _crea_client(self) -> Client:
+        if self.url is None:
+            return Client(self.parametri)
+        intestazioni = {"Authorization": f"Bearer {self.token}"} if self.token else {}
+        trasporto = streamable_http_client(self.url, http_client=create_mcp_http_client(headers=intestazioni))
+        return Client(trasporto, cache=None)
 
     async def __aenter__(self) -> "ClienteMCP":
         self._stack = AsyncExitStack()
         try:
-            self._client = await self._stack.enter_async_context(Client(self.parametri))
+            self._client = await self._stack.enter_async_context(self._crea_client())
         except Exception as e:
             await self._stack.aclose()
             raise ServerNonDisponibile(f"Impossibile avviare o contattare il server MCP: {e}") from e

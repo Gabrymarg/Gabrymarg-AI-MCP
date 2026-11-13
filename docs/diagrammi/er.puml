@@ -4,6 +4,18 @@ skinparam shadowing false
 hide circle
 skinparam linetype ortho
 
+entity UTENTI {
+  * id_utente : INTEGER <<PK>>
+  --
+  * username : TEXT <<UNIQUE>>
+  * password_hash : TEXT
+  * ruolo : TEXT
+  * nome : TEXT
+  telefono : TEXT
+  * attivo : INTEGER
+  * creato_il : TEXT
+}
+
 entity TAVOLI {
   * id_tavolo : INTEGER <<PK>>
   --
@@ -32,6 +44,7 @@ entity PRENOTAZIONI {
   * stato : TEXT
   * id_tavolo : INTEGER <<FK>>
   * fonte : TEXT
+  id_utente : INTEGER <<FK>>
   * creata_il : TEXT
   modificata_il : TEXT
 }
@@ -95,6 +108,7 @@ entity ORDINI {
   * totale : REAL
   note : TEXT
   * fonte : TEXT
+  id_utente : INTEGER <<FK>>
   * creato_il : TEXT
 }
 
@@ -108,6 +122,8 @@ entity ORDINI_RIGHE {
   note : TEXT
 }
 
+UTENTI |o--o{ PRENOTAZIONI : "proprietario (cliente)"
+UTENTI |o--o{ ORDINI : "proprietario (cliente)"
 TAVOLI ||--o{ PRENOTAZIONI : "assegnato a"
 CATEGORIE ||--o{ ARTICOLI : "contiene"
 ARTICOLI ||--o{ ARTICOLI_ALLERGENI

@@ -9,24 +9,37 @@ package "mcp_server" <<Rectangle>> {
   class server <<module>> {
     mcp : MCPServer
     .. tool di lettura (readOnlyHint = true) ..
+    + mio_profilo() : Profilo
     + orari_apertura() : OrariApertura
     + cerca_menu(testo, categoria, escludi_allergeni, ...) : RisultatoMenu
     + dettaglio_piatto(nome, id_articolo) : DettaglioPiatto
     + verifica_disponibilita(data, ora, coperti) : Disponibilita
+    + orari_disponibili(data, coperti) : OrariDisponibili
     + trova_prenotazioni(nome, telefono, data) : ElencoPrenotazioni
+    + prenotazioni_del_giorno(data) : QuadroSala
     + stato_ordine(id_ordine, telefono) : Ordine
+    + ordini_da_preparare(data) : ElencoOrdini
     .. tool di scrittura (readOnlyHint = false) ..
     + crea_prenotazione(...) : Prenotazione
     + modifica_prenotazione(...) : Prenotazione
     + cancella_prenotazione(id, telefono) : Prenotazione <<destructive>>
     + crea_ordine_asporto(...) : Ordine
+    + aggiorna_stato_ordine(id, nuovo_stato) : Ordine
+    + aggiorna_scorta(ingrediente, quantita, modalita) : EsitoScorta
+    + imposta_disponibilita_piatto(nome, disponibile) : DisponibilitaPiatto
     .. ..
-    - gestisci_errori(fn) <<decorator>>
+    - tool_protetto(fn) <<decorator>>
+    - _identita() : Utente
+  }
+  class VerificatoreToken {
+    + verify_token(token) : AccessToken
   }
   class schemas <<module, Pydantic>> {
     RisultatoMenu, Piatto, DettaglioPiatto
-    Disponibilita, Prenotazione, ElencoPrenotazioni
-    RigaOrdineIn, Ordine, RigaOrdine, OrariApertura
+    Disponibilita, OrariDisponibili, Prenotazione
+    ElencoPrenotazioni, QuadroSala, RigaOrdineIn
+    Ordine, RigaOrdine, ElencoOrdini, OrariApertura
+    Profilo, EsitoScorta, DisponibilitaPiatto
   }
 }
 
@@ -64,7 +77,39 @@ package "backend" <<Rectangle>> {
     messaggio : str
     dettagli : dict
   }
+  class permessi <<module>> {
+    PERMESSI : dict<tool, set<ruolo>>
+    + puo(ruolo, tool) : bool
+    + tool_consentiti(ruolo) : list
+  }
+  class Utente {
+    id_utente : int
+    ruolo : str
+    nome : str
+    telefono : str
+    personale() : bool
+    cliente_registrato() : bool
+  }
+  class utenti <<module>> {
+    + hash_password(pwd) : str
+    + autentica(conn, username, pwd) : Utente
+    + utente_attivo(conn, id) : Utente
+    + crea_utente(...) / modifica_utente(...)
+  }
+  class token_accesso <<module>> {
+    + emetti(id_utente, ruolo) : str
+    + verifica(token) : dict
+  }
 }
+
+VerificatoreToken ..> token_accesso
+VerificatoreToken ..> utenti : ruolo attuale dal DB
+server ..> VerificatoreToken
+server ..> permessi : controllo a ogni tool
+server ..> Utente
+prenotazioni ..> Utente : proprietà dei dati
+ordini ..> Utente
+permessi ..> Utente
 
 database "SQLite\n(risto.db)" as DB
 

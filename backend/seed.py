@@ -19,7 +19,7 @@ from pathlib import Path
 
 from faker import Faker
 
-from backend import clock, ordini, prenotazioni
+from backend import clock, ordini, prenotazioni, utenti
 from backend.db import connetti, crea_schema, percorso_db
 from backend.errori import ErroreDominio
 
@@ -175,6 +175,16 @@ TAVOLI = (
 # Lunedì chiuso; da martedì a domenica pranzo e cena.
 ORARI = [(g, "pranzo", "12:00", "15:00") for g in range(1, 7)] + [(g, "cena", "19:00", "23:30") for g in range(1, 7)]
 
+# Utenti dimostrativi della web app (credenziali di prova, solo per l'ambiente locale).
+# (username, password, ruolo, nome, telefono)
+UTENTI_DEMO = [
+    ("admin", "Admin-Borgo-2026", "admin", "Amministratore", None),
+    ("sala", "Sala-Borgo-2026", "sala", "Marta (sala)", None),
+    ("cucina", "Cucina-Borgo-2026", "cucina", "Chef Paolo", None),
+    ("giulia", "Giulia-Borgo-2026", "cliente", "Giulia Ferri", "3331234567"),
+    ("luca", "Luca-Borgo-2026", "cliente", "Luca Bianchi", "3471112233"),
+]
+
 # Dati noti usati dagli scenari di test.
 DATI_RIFERIMENTO = {
     "cliente_prenotazione": {"nome": "Giulia Ferri", "telefono": "3331234567"},
@@ -302,6 +312,13 @@ def popola(conn, seme: int = 42) -> dict:
         conn.execute("UPDATE ORDINI SET stato = 'in_preparazione' WHERE id_ordine = ?", (ord_rif["id_ordine"],))
     except ErroreDominio:
         pass
+
+    # Utenti della web app; i clienti diventano proprietari delle prenotazioni e degli ordini col loro telefono.
+    for username, password, ruolo, nome, tel in UTENTI_DEMO:
+        u = utenti.crea_utente(conn, username, password, ruolo, nome, tel)
+        if tel:
+            conn.execute("UPDATE PRENOTAZIONI SET id_utente = ? WHERE telefono = ?", (u["id_utente"], tel))
+            conn.execute("UPDATE ORDINI SET id_utente = ? WHERE telefono = ?", (u["id_utente"], tel))
 
     return {
         "oggi": oggi.isoformat(),

@@ -1,0 +1,66 @@
+@startuml architettura
+title Architettura del sistema - componenti e flussi
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam nodesep 30
+skinparam ranksep 45
+
+actor "Utente\n(cliente, sala, cucina, admin)" as U
+
+node "Browser" {
+  [Pagina web\nHTML, CSS, JavaScript] as FE
+}
+
+node "Web app (FastAPI, porta 8000)" {
+  [Autenticazione\nlogin, cookie HttpOnly,\nblocco tentativi] as AUTH
+  [Gestore sessioni\nuna per utente] as SES
+  [API amministrazione\nutenti e ruoli] as ADM
+  package "Harness agentico" {
+    [Agent\nciclo, validazione,\nconferma, coerenza,\ngestione contesto] as AG
+    [LLMProvider] as PROV
+    [ClienteMCP\nHTTP + Bearer token] as CLI
+    [LoggerJSONL] as LOG
+  }
+}
+
+node "Server MCP (porta 8765)" {
+  [Verifica token\n+ ruolo dal DB] as VER
+  [17 tool\npermessi per ruolo] as TOOLS
+}
+
+node "Back-end" {
+  [Servizi di dominio\nprenotazioni, menu,\nordini, utenti] as SRV
+  database "SQLite" as DB
+}
+
+cloud "Modelli linguistici" {
+  [Ollama\nqwen2.5:3b (locale)] as OLL
+  [Groq\ngpt-oss (cloud)] as GROQ
+}
+
+U --> FE
+FE --> AUTH : login (HTTPS in produzione)
+FE --> SES : chat (Server-Sent Events),\nconferme
+FE --> ADM : solo admin
+SES --> AG
+AG --> PROV
+PROV --> OLL
+PROV --> GROQ
+AG --> CLI
+AG --> LOG
+CLI --> VER : JSON-RPC su HTTP\nAuthorization: Bearer <token>
+VER --> TOOLS
+TOOLS --> SRV
+SRV --> DB
+AUTH --> DB : verifica password\n(hash scrypt)
+ADM --> DB
+
+note bottom of TOOLS
+  Difesa in profondità:
+  1. l'harness mostra al modello solo i tool del ruolo;
+  2. il server verifica il permesso a ogni chiamata;
+  3. il back-end applica la proprietà dei dati
+     (un cliente vede solo i propri);
+  4. ogni scrittura richiede la conferma dell'utente.
+end note
+@enduml

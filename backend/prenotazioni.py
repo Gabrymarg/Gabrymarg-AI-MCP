@@ -5,8 +5,9 @@ Regole di business:
 - si può prenotare solo durante un turno di apertura, entro MARGINE_FINALE_MIN
   minuti dalla chiusura, non nel passato e al massimo ANTICIPO_MAX_GIORNI giorni avanti;
 - viene assegnato il tavolo libero più piccolo con posti sufficienti;
-- modifica e cancellazione richiedono il telefono usato in fase di prenotazione
-  (verifica minima dell'identità del cliente).
+- chi può vedere o modificare una prenotazione dipende dall'utente (vedi backend/permessi.py):
+  il personale opera su tutte; un cliente registrato solo sulle proprie (id_utente);
+  un ospite senza login deve fornire il telefono usato in fase di prenotazione.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from typing import Any
 from backend import clock
 from backend.errori import ErroreDominio
 from backend.orari import Turno, descrizione_orari, turni_del_giorno
+from backend.permessi import OSPITE, Utente
 from backend.validazione import (
     nome_cliente,
     normalizza_telefono,
@@ -153,13 +155,22 @@ def _carica(conn: sqlite3.Connection, id_prenotazione: int) -> sqlite3.Row:
     return r
 
 
-def _carica_verificata(conn: sqlite3.Connection, id_prenotazione: int, telefono: str) -> sqlite3.Row:
+def _carica_verificata(
+    conn: sqlite3.Connection, id_prenotazione: int, telefono: str | None, utente: Utente = OSPITE
+) -> sqlite3.Row:
     r = _carica(conn, id_prenotazione)
-    if not stesso_telefono(r["telefono"], telefono):
+    if utente.personale:
+        autorizzato = True
+    elif utente.cliente_registrato:
+        autorizzato = r["id_utente"] == utente.id_utente
+    else:
+        autorizzato = bool(telefono) and stesso_telefono(r["telefono"], telefono)
+    if not autorizzato:
         # Stesso messaggio della prenotazione inesistente: non si rivela se il numero esiste.
         raise ErroreDominio(
             "PRENOTAZIONE_INESISTENTE",
-            f"Non esiste nessuna prenotazione con numero {id_prenotazione} associata a questo telefono.",
+            f"Non esiste nessuna prenotazione con numero {id_prenotazione} "
+            + ("tra le sue prenotazioni." if utente.cliente_registrato else "associata a questo telefono."),
         )
     if r["stato"] != "confermata":
         raise ErroreDominio(
@@ -196,18 +207,46 @@ def verifica_disponibilita(conn: sqlite3.Connection, data: str, ora: str, copert
     return esito
 
 
+def orari_disponibili(conn: sqlite3.Connection, data: str, coperti: int) -> dict[str, Any]:
+    """Tutti gli orari prenotabili (a passi di 30 minuti) con almeno un tavolo libero, per turno."""
+    giorno = parse_data(data)
+    _verifica_coperti(conn, coperti)
+    if giorno < clock.adesso().date():
+        raise ErroreDominio("DATA_PASSATA", f"Il giorno {giorno.isoformat()} è già passato.")
+    turni = turni_del_giorno(conn, giorno)
+    esito: dict[str, Any] = {"data": giorno.isoformat(), "coperti": coperti, "chiuso": not turni, "turni": {}}
+    for turno in turni:
+        liberi = []
+        t = datetime.combine(giorno, turno.apertura)
+        fine = datetime.combine(giorno, turno.chiusura) - timedelta(minutes=MARGINE_FINALE_MIN)
+        while t <= fine:
+            if t > clock.adesso() and _tavoli_liberi(conn, giorno, t.time(), coperti):
+                liberi.append(f"{t:%H:%M}")
+            t += timedelta(minutes=PASSO_ALTERNATIVE_MIN)
+        esito["turni"][turno.nome] = liberi
+    if not turni:
+        esito["messaggio"] = descrizione_orari(conn, giorno)
+    return esito
+
+
 def crea_prenotazione(
     conn: sqlite3.Connection,
     data: str,
     ora: str,
     coperti: int,
-    nome: str,
-    telefono: str,
+    nome: str | None,
+    telefono: str | None,
     note: str | None = None,
     fonte: str = "agente",
+    utente: Utente = OSPITE,
 ) -> dict[str, Any]:
     giorno, orario = parse_data(data), parse_ora(ora)
-    nome = nome_cliente(nome)
+    if utente.cliente_registrato:
+        # Per un cliente registrato nome e telefono vengono dal profilo, non dalla conversazione.
+        nome, telefono = nome or utente.nome, telefono or utente.telefono
+    nome = nome_cliente(nome or "")
+    if not telefono:
+        raise ErroreDominio("TELEFONO_MANCANTE", "Il numero di telefono del cliente è obbligatorio.")
     tel = normalizza_telefono(telefono)
     note = testo_breve(note, "note", 300)
     _verifica_coperti(conn, coperti)
@@ -221,8 +260,8 @@ def crea_prenotazione(
         )
     cur = conn.execute(
         """INSERT INTO PRENOTAZIONI (data, ora, coperti, nome_cliente, telefono, note, stato,
-                                     id_tavolo, fonte, creata_il)
-           VALUES (?, ?, ?, ?, ?, ?, 'confermata', ?, ?, ?)""",
+                                     id_tavolo, fonte, id_utente, creata_il)
+           VALUES (?, ?, ?, ?, ?, ?, 'confermata', ?, ?, ?, ?)""",
         (
             giorno.isoformat(),
             f"{orario:%H:%M}",
@@ -232,6 +271,7 @@ def crea_prenotazione(
             note,
             liberi[0]["id_tavolo"],
             fonte,
+            utente.id_utente if utente.cliente_registrato else None,
             clock.adesso().isoformat(timespec="minutes"),
         ),
     )
@@ -244,12 +284,17 @@ def trova_prenotazioni(
     telefono: str | None = None,
     data: str | None = None,
     includi_passate: bool = False,
+    utente: Utente = OSPITE,
 ) -> list[dict[str, Any]]:
-    if not (nome or telefono or data):
+    condizioni, parametri = ["p.stato = 'confermata'"], []
+    if utente.cliente_registrato:
+        # Un cliente registrato vede solo le proprie prenotazioni, qualunque filtro indichi.
+        condizioni.append("p.id_utente = ?")
+        parametri.append(utente.id_utente)
+    elif not (nome or telefono or data):
         raise ErroreDominio(
             "FILTRO_MANCANTE", "Indicare almeno uno tra nome, telefono e data per cercare le prenotazioni."
         )
-    condizioni, parametri = ["p.stato = 'confermata'"], []
     if nome:
         condizioni.append("p.nome_cliente LIKE ?")
         parametri.append(f"%{nome.strip()}%")
@@ -272,13 +317,14 @@ def trova_prenotazioni(
 def modifica_prenotazione(
     conn: sqlite3.Connection,
     id_prenotazione: int,
-    telefono: str,
+    telefono: str | None,
     data: str | None = None,
     ora: str | None = None,
     coperti: int | None = None,
     note: str | None = None,
+    utente: Utente = OSPITE,
 ) -> dict[str, Any]:
-    attuale = _carica_verificata(conn, id_prenotazione, telefono)
+    attuale = _carica_verificata(conn, id_prenotazione, telefono, utente)
     if data is None and ora is None and coperti is None and note is None:
         raise ErroreDominio("NESSUNA_MODIFICA", "Indicare almeno un campo da modificare.")
     giorno = parse_data(data) if data else date.fromisoformat(attuale["data"])
@@ -316,10 +362,32 @@ def modifica_prenotazione(
     return _riga_in_dict(_carica(conn, id_prenotazione))
 
 
-def cancella_prenotazione(conn: sqlite3.Connection, id_prenotazione: int, telefono: str) -> dict[str, Any]:
-    _carica_verificata(conn, id_prenotazione, telefono)
+def cancella_prenotazione(
+    conn: sqlite3.Connection, id_prenotazione: int, telefono: str | None, utente: Utente = OSPITE
+) -> dict[str, Any]:
+    _carica_verificata(conn, id_prenotazione, telefono, utente)
     conn.execute(
         "UPDATE PRENOTAZIONI SET stato = 'cancellata', modificata_il = ? WHERE id_prenotazione = ?",
         (clock.adesso().isoformat(timespec="minutes"), id_prenotazione),
     )
     return _riga_in_dict(_carica(conn, id_prenotazione))
+
+
+def prenotazioni_del_giorno(conn: sqlite3.Connection, data: str) -> dict[str, Any]:
+    """Quadro della sala per una data (uso del personale): prenotazioni attive, coperti per turno."""
+    giorno = parse_data(data)
+    righe = conn.execute(
+        _SELECT_PRENOTAZIONE + " WHERE p.data = ? AND p.stato = 'confermata' ORDER BY p.ora, t.nome",
+        (giorno.isoformat(),),
+    ).fetchall()
+    prenotazioni = [_riga_in_dict(r) for r in righe]
+    coperti = {"pranzo": 0, "cena": 0}
+    for p in prenotazioni:
+        coperti["pranzo" if p["ora"] < "17:00" else "cena"] += p["coperti"]
+    return {
+        "data": giorno.isoformat(),
+        "numero_prenotazioni": len(prenotazioni),
+        "coperti_pranzo": coperti["pranzo"],
+        "coperti_cena": coperti["cena"],
+        "prenotazioni": prenotazioni,
+    }

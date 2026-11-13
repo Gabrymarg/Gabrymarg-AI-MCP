@@ -12,11 +12,14 @@ from __future__ import annotations
 import json
 import os
 import time
-from typing import Any
+from typing import Any, Callable
 
 import httpx
 
 from harness.llm.base import LLMProvider, LLMResponse, Messaggio, ToolCall, ToolSpec, Uso
+
+
+ATTESA_MASSIMA_S = 120.0  # oltre questa attesa richiesta dal fornitore non si riprova
 
 
 class OpenAICompatibileProvider(LLMProvider):
@@ -37,6 +40,9 @@ class OpenAICompatibileProvider(LLMProvider):
         self.temperatura = temperatura
         self.max_tentativi = max_tentativi
         self.attese_limite = 0  # quante volte si è atteso per i limiti di frequenza
+        # Funzione (secondi, tentativo) chiamata prima di ogni attesa imposta dal fornitore: permette
+        # all'harness di mostrare all'utente che la risposta è in arrivo e non bloccata.
+        self.notifica_attesa: Callable[[float, int], None] | None = None
         self.http = httpx.Client(timeout=timeout)
 
     def _post_con_riprova(self, corpo: dict[str, Any]) -> httpx.Response:
@@ -49,10 +55,17 @@ class OpenAICompatibileProvider(LLMProvider):
                 break
             attesa = r.headers.get("retry-after")
             try:
-                secondi = min(float(attesa), 60.0) if attesa else 2.0 * 2**tentativo
+                richiesta = float(attesa) if attesa else 2.0 * 2**tentativo
             except ValueError:
-                secondi = 2.0 * 2**tentativo
+                richiesta = 2.0 * 2**tentativo
+            # Limite giornaliero o attesa lunga: riprovare tra pochi secondi è inutile, meglio fallire subito
+            # con un messaggio chiaro (l'utente può cambiare modello) che tenere l'interfaccia in attesa.
+            if r.status_code == 429 and ("per day" in r.text or richiesta > ATTESA_MASSIMA_S):
+                break
+            secondi = min(richiesta, ATTESA_MASSIMA_S)
             self.attese_limite += 1
+            if self.notifica_attesa:
+                self.notifica_attesa(secondi, tentativo + 1)
             time.sleep(secondi)
         if r.status_code >= 400:
             # Il messaggio d'errore del fornitore (mai la chiave) aiuta a capire limiti e modelli non validi.

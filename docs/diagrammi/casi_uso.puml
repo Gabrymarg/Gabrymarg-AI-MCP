@@ -1,5 +1,5 @@
 @startuml casi_uso
-title Osteria del Borgo - Diagramma dei casi d'uso dell'assistente
+title Osteria del Borgo - Diagramma dei casi d'uso per ruolo
 skinparam shadowing false
 skinparam packageStyle rectangle
 skinparam usecase {
@@ -7,64 +7,55 @@ skinparam usecase {
 }
 left to right direction
 
+actor "Ospite\n(senza login)" as Ospite
 actor Cliente
-actor "Personale\ndi sala" as Staff
-actor "Modello linguistico\n(locale o cloud)" as LLM <<sistema>>
+actor "Personale\ndi sala" as Sala
+actor Cucina
+actor Amministratore as Admin
 
-rectangle "Assistente virtuale Osteria del Borgo  (harness agentico + server MCP)" {
-  package "Menu" {
-    usecase "Consultare il menu" as M1
-    usecase "Filtrare per allergeni\no vegetariano" as M2
-    usecase "Vedere dettaglio piatto\n(ingredienti, allergeni)" as M3
-  }
-  package "Prenotazioni" {
-    usecase "Verificare\ndisponibilità" as P1
-    usecase "Prenotare un tavolo" as P2
-    usecase "Cercare le proprie\nprenotazioni" as P3
-    usecase "Modificare una\nprenotazione" as P4
-    usecase "Cancellare una\nprenotazione" as P5
-  }
-  package "Asporto" {
-    usecase "Ordinare da asporto" as O1
-    usecase "Conoscere lo stato\ndi un ordine" as O2
-  }
-  package "Controlli trasversali" {
-    usecase "Confermare l'operazione\n(human-in-the-loop)" as C1
-    usecase "Verificare l'identità\n(telefono)" as C2
-    usecase "Controllare le scorte" as C3
-  }
+Ospite <|-- Cliente
+Sala <|-- Admin
+
+rectangle "Assistente virtuale Osteria del Borgo" {
+  usecase "Consultare menu e allergeni" as M1
+  usecase "Verificare disponibilità\ne orari liberi" as P1
+  usecase "Prenotare un tavolo" as P2
+  usecase "Ordinare da asporto" as O1
+  usecase "Conoscere lo stato\ndi un ordine" as O2
+  usecase "Gestire le PROPRIE\nprenotazioni" as P3
+  usecase "Gestire TUTTE le prenotazioni\ne il quadro della sala" as P4
+  usecase "Vedere e aggiornare\ngli ordini da preparare" as O3
+  usecase "Aggiornare magazzino\ne piatti nel menu" as A1
+  usecase "Gestire utenti e ruoli\n(pannello web)" as A2
+  usecase "Confermare l'operazione\n(human-in-the-loop)" as C1
 }
 
-Cliente --> M1
-Cliente --> P1
-Cliente --> P2
+Ospite --> M1
+Ospite --> P1
+Ospite --> P2
+Ospite --> O1
+Ospite --> O2
 Cliente --> P3
-Cliente --> P4
-Cliente --> P5
-Cliente --> O1
-Cliente --> O2
-
-M2 .> M1 : <<extend>>
-M3 .> M1 : <<extend>>
+Sala --> P4
+Sala --> O3
+Cucina --> M1
+Cucina --> O3
+Admin --> A1
+Admin --> A2
 
 P2 ..> C1 : <<include>>
-P4 ..> C1 : <<include>>
-P5 ..> C1 : <<include>>
 O1 ..> C1 : <<include>>
-P4 ..> C2 : <<include>>
-P5 ..> C2 : <<include>>
-O2 ..> C2 : <<include>>
-O1 ..> C3 : <<include>>
+P3 ..> C1 : <<include>>
+P4 ..> C1 : <<include>>
+O3 ..> C1 : <<include>>
+A1 ..> C1 : <<include>>
 
-Staff --> P3
-
-M1 -- LLM
-P2 -- LLM
-O1 -- LLM
-
-note right of C1
-  Richiesta per ogni tool con
-  readOnlyHint = false: il cliente
-  vede un riepilogo e conferma [s/N].
+note bottom of C1
+  Ogni caso d'uso che modifica i dati richiede
+  la conferma esplicita dell'utente.
+  Tutti i casi d'uso passano per l'autenticazione
+  (tranne l'ospite) e per il controllo dei permessi
+  sul server MCP: il ruolo deriva dal token di accesso,
+  non da quanto dichiarato nella conversazione.
 end note
 @enduml

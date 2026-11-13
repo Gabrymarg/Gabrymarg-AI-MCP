@@ -12,10 +12,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import json
 import os
 import re
 import shutil
+import socket
+import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
@@ -27,6 +30,7 @@ import yaml
 RADICE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RADICE))
 
+from backend import token_accesso  # noqa: E402
 from backend.db import connetti  # noqa: E402
 from backend.seed import crea_database  # noqa: E402
 from harness.agent import Agent  # noqa: E402
@@ -42,6 +46,7 @@ class Risultato:
     id: str
     titolo: str
     tipo: str
+    utente: str = field(default="ospite", init=False)
     turni: list[str]
     atteso: str
     risposte: list[str] = field(default_factory=list)
@@ -89,6 +94,38 @@ def estratto(eventi: list[dict[str, Any]]) -> list[str]:
     return righe
 
 
+@contextlib.contextmanager
+def server_http(env: dict[str, str]):
+    """Avvia il server MCP via HTTP (come per la web app) su una porta libera, per gli scenari con utente."""
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        porta = s.getsockname()[1]
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "mcp_server.server", "--http", "--port", str(porta)],
+        cwd=RADICE, env={**os.environ, **env}, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    try:
+        for _ in range(150):
+            try:
+                socket.create_connection(("127.0.0.1", porta), timeout=0.2).close()
+                break
+            except OSError:
+                time.sleep(0.1)
+        yield f"http://127.0.0.1:{porta}/mcp"
+    finally:
+        proc.terminate()
+        proc.wait(timeout=10)
+
+
+def token_utente(db: Path, username: str) -> str:
+    conn = connetti(db)
+    try:
+        riga = conn.execute("SELECT id_utente, ruolo FROM UTENTI WHERE username = ?", (username,)).fetchone()
+    finally:
+        conn.close()
+    return token_accesso.emetti(riga[0], riga[1])
+
+
 async def esegui_scenario(s: dict, adesso: str, modello_db: Path, cartella: Path, cfg: Config) -> Risultato:
     db = cartella / "db" / f"{s['id']}.db"
     db.parent.mkdir(parents=True, exist_ok=True)
@@ -101,8 +138,35 @@ async def esegui_scenario(s: dict, adesso: str, modello_db: Path, cartella: Path
     r.log = str(log.percorso.relative_to(cartella))
     llm = crea_provider(cfg.provider, cfg.modello)
     inizio = time.perf_counter()
+    with contextlib.ExitStack() as pila:
+        if s.get("utente"):
+            # Utente autenticato: server MCP via HTTP e token firmato, come nella web app.
+            url = pila.enter_context(server_http(env))
+            connessione_mcp = ClienteMCP(url=url, token=token_utente(db, s["utente"]))
+        else:
+            connessione_mcp = ClienteMCP(cfg.comando_server, cfg.cartella_server, env=env)
+        r.utente = s.get("utente", "ospite")
+        await _esegui_turni(s, r, connessione_mcp, llm, conferme, log, cfg)
+    r.durata_s = round(time.perf_counter() - inizio, 1)
+    r.scritture_eseguite = [
+        e["tool"] for e in log.eventi
+        if e["tipo"] == "risultato_tool" and e.get("ok") and e["tool"] in TOOL_SCRITTURA
+    ]
+    r.conferme_richieste = sum(1 for e in log.eventi if e["tipo"] == "conferma_utente")
+    r.estratto_log = estratto(log.eventi)
+    verifica(s.get("verifiche", {}), r, db)
+    return r
+
+
+TOOL_SCRITTURA = {
+    "crea_prenotazione", "modifica_prenotazione", "cancella_prenotazione", "crea_ordine_asporto",
+    "aggiorna_stato_ordine", "aggiorna_scorta", "imposta_disponibilita_piatto",
+}
+
+
+async def _esegui_turni(s, r, connessione_mcp, llm, conferme, log, cfg) -> None:
     try:
-        async with ClienteMCP(cfg.comando_server, cfg.cartella_server, env=env) as cliente:
+        async with connessione_mcp as cliente:
             agente = Agent(llm, cliente, conferma_scriptata(conferme), log, cfg)
             await agente.avvia()
             for testo in s["turni"]:
@@ -116,15 +180,6 @@ async def esegui_scenario(s: dict, adesso: str, modello_db: Path, cartella: Path
                 r.token_output += esito.uso.token_output
     finally:
         log.chiudi()
-    r.durata_s = round(time.perf_counter() - inizio, 1)
-    r.scritture_eseguite = [
-        e["tool"] for e in log.eventi
-        if e["tipo"] == "risultato_tool" and e.get("ok") and e["tool"] in {n for n, sp in agente.strumenti.items() if sp.scrittura}
-    ]
-    r.conferme_richieste = sum(1 for e in log.eventi if e["tipo"] == "conferma_utente")
-    r.estratto_log = estratto(log.eventi)
-    verifica(s.get("verifiche", {}), r, db)
-    return r
 
 
 def verifica(v: dict, r: Risultato, db: Path) -> None:
@@ -165,12 +220,12 @@ def scrivi_report(risultati: list[Risultato], cfg: Config, cartella: Path) -> Pa
         f"{tot_in + tot_out} (media {(tot_in + tot_out) // max(1, len(risultati))} per scenario). "
         f"Tempo totale: {sum(r.durata_s for r in risultati):.0f} s.",
         "",
-        "| ID | Scenario | Tipo | Esito | Tool invocati | Iter. | Token in | Token out | Tempo (s) |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| ID | Scenario | Utente | Tipo | Esito | Tool invocati | Iter. | Token in | Token out | Tempo (s) |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in risultati:
         righe.append(
-            f"| {r.id} | {r.titolo} | {r.tipo} | {'SUPERATO' if r.superato else 'NON SUPERATO'} | "
+            f"| {r.id} | {r.titolo} | {r.utente} | {r.tipo} | {'SUPERATO' if r.superato else 'NON SUPERATO'} | "
             f"{', '.join(r.tool_invocati) or '-'} | {r.iterazioni} | {r.token_input} | {r.token_output} | {r.durata_s} |"
         )
     for r in risultati:
@@ -184,7 +239,7 @@ def scrivi_report(risultati: list[Risultato], cfg: Config, cartella: Path) -> Pa
             "",
             "**Esito ottenuto:** " + " / ".join(f"\"{x}\"" for x in r.risposte),
             "",
-            f"Arresto: {', '.join(r.motivi_arresto)}; conferme richieste: {r.conferme_richieste}; "
+            f"Utente: {r.utente}. Arresto: {', '.join(r.motivi_arresto)}; conferme richieste: {r.conferme_richieste}; "
             f"scritture eseguite: {', '.join(r.scritture_eseguite) or 'nessuna'}.",
         ]
         if r.controlli_falliti:
@@ -196,11 +251,12 @@ def scrivi_report(risultati: list[Risultato], cfg: Config, cartella: Path) -> Pa
 
 
 async def main_async(args: argparse.Namespace) -> None:
-    dati = yaml.safe_load((Path(__file__).parent / "scenari.yaml").read_text(encoding="utf-8"))
+    dati = yaml.safe_load((Path(__file__).parent / args.file).read_text(encoding="utf-8"))
     cfg = Config()
     cfg.provider = args.provider or cfg.provider
     cfg.modello = args.modello or cfg.modello
-    nome_cartella = re.sub(r"[^\w.-]", "_", f"{cfg.provider}_{cfg.modello}")
+    suffisso = "" if args.file == "scenari.yaml" else "_" + Path(args.file).stem
+    nome_cartella = re.sub(r"[^\w.-]", "_", f"{cfg.provider}_{cfg.modello}{suffisso}")
     cartella = Path(args.uscita or Path(__file__).parent / "risultati" / nome_cartella)
     if cartella.exists():
         shutil.rmtree(cartella)
@@ -238,6 +294,7 @@ def main() -> None:
     p.add_argument("--provider", choices=["ollama", "openai", "groq"])
     p.add_argument("--modello")
     p.add_argument("--solo", help="elenco di id separati da virgola, es. S01,S05")
+    p.add_argument("--file", default="scenari.yaml", help="file degli scenari (es. scenari_ruoli.yaml)")
     p.add_argument("--uscita", help="cartella di output")
     asyncio.run(main_async(p.parse_args()))
 

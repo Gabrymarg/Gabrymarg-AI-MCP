@@ -105,3 +105,49 @@ class Ordine(BaseModel):
 class OrariApertura(BaseModel):
     oggi: str = Field(description="Data e ora attuali (AAAA-MM-GGTHH:MM).")
     settimana: list[str] = Field(description="Orari per ogni giorno della settimana.")
+
+
+# ----------------------------------------------------------------------------- utenti e personale
+
+
+class Profilo(BaseModel):
+    ruolo: str = Field(description="ospite | cliente | sala | cucina | admin")
+    descrizione_ruolo: str
+    nome: str | None = Field(default=None, description="Nome dell'utente autenticato (assente per gli ospiti).")
+    tool_consentiti: list[str]
+
+
+class QuadroSala(BaseModel):
+    data: str
+    numero_prenotazioni: int
+    coperti_pranzo: int
+    coperti_cena: int
+    prenotazioni: list[Prenotazione]
+
+
+class ElencoOrdini(BaseModel):
+    data: str
+    numero_ordini: int
+    ordini: list[Ordine]
+
+
+class EsitoScorta(BaseModel):
+    ingrediente: str
+    unita_misura: str
+    quantita_precedente: float
+    quantita_attuale: float
+    sotto_scorta_minima: bool
+
+
+class DisponibilitaPiatto(BaseModel):
+    id_articolo: int
+    nome: str
+    nel_menu: bool
+
+
+class OrariDisponibili(BaseModel):
+    data: str
+    coperti: int
+    chiuso: bool = Field(description="True se il ristorante quel giorno è chiuso.")
+    turni: dict[str, list[str]] = Field(description="Per ogni turno ('pranzo', 'cena') gli orari HH:MM con tavolo libero.")
+    messaggio: str | None = None

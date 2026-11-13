@@ -48,6 +48,10 @@ MESSAGGI_ARRESTO = {
     "troppi_errori": "Mi dispiace, in questo momento il sistema del ristorante non risponde correttamente. "
                      "La invito a riprovare più tardi o a telefonare al ristorante.",
     "errore_modello": "Mi dispiace, l'assistente non è al momento disponibile. Riprovi tra poco.",
+    "contesto_troppo_lungo": "La conversazione è diventata troppo lunga per il modello in uso. "
+                             "Avvii una nuova conversazione e ripeta la richiesta.",
+    "limite_fornitore": "Il servizio del modello ha raggiunto il limite di utilizzo del piano gratuito. "
+                        "Scelga un altro modello dal menu (ad esempio quello locale) oppure riprovi più tardi.",
 }
 
 
@@ -91,27 +95,43 @@ class Agent:
         self.messaggi: list[Messaggio] = []
         self.turno = 0
         self.uso_sessione = Uso()
+        self.profilo: dict[str, Any] = {"ruolo": "ospite", "nome": None}
 
     # ------------------------------------------------------------------ avvio
 
     async def avvia(self) -> None:
-        """Carica i tool dal server e prepara il prompt di sistema con data e orari correnti."""
-        for spec in await self.esecutore.elenco_strumenti():
+        """Carica i tool dal server, legge il profilo dell'utente e prepara il prompt di sistema.
+
+        Al modello vengono presentati solo i tool consentiti al ruolo dell'utente. Il server applica
+        comunque i permessi a ogni chiamata: il filtro qui serve a non proporre al modello azioni
+        che verrebbero rifiutate (meno errori, meno token).
+        """
+        tutti = {spec.nome: spec for spec in await self.esecutore.elenco_strumenti()}
+        consentiti = set(tutti)
+        if "mio_profilo" in tutti:
+            esito = await self.esecutore.chiama("mio_profilo", {}, self.cfg.timeout_tool_s)
+            if esito.ok and isinstance(esito.contenuto, dict):
+                self.profilo = esito.contenuto
+                consentiti = set(esito.contenuto.get("tool_consentiti", consentiti))
+        for nome, spec in tutti.items():
+            if nome not in consentiti or nome == "mio_profilo":
+                continue
             # La validazione usa lo schema originale; al modello va la versione compatta.
-            self.validatori[spec.nome] = Draft202012Validator(spec.parametri)
+            self.validatori[nome] = Draft202012Validator(spec.parametri)
             spec.parametri = compatta_schema(spec.parametri)
-            self.strumenti[spec.nome] = spec
+            self.strumenti[nome] = spec
         adesso, orari = datetime.now(), []
         if "orari_apertura" in self.strumenti:
             esito = await self.esecutore.chiama("orari_apertura", {}, self.cfg.timeout_tool_s)
             if esito.ok and isinstance(esito.contenuto, dict):
                 adesso = datetime.fromisoformat(esito.contenuto["oggi"])
                 orari = esito.contenuto["settimana"]
-        self.messaggi = [Messaggio("system", prompt_di_sistema(adesso, orari))]
+        self.messaggi = [Messaggio("system", prompt_di_sistema(adesso, orari, self.profilo))]
         self.log.registra(
             "avvio",
             turno=0,
             modello=self.llm.descrizione(),
+            ruolo=self.profilo.get("ruolo"),
             strumenti=[
                 {"nome": s.nome, "scrittura": s.scrittura, "distruttivo": s.distruttivo}
                 for s in self.strumenti.values()
@@ -123,10 +143,32 @@ class Agent:
     def nuova_conversazione(self) -> None:
         self.messaggi = self.messaggi[:1]
 
+    def _contesto_per_modello(self, inizio_turno: int) -> list[Messaggio]:
+        """Conversazione da inviare al modello, con i risultati dei tool dei turni precedenti accorciati.
+
+        Senza questa compattazione ogni risultato voluminoso (es. l'intero menu) verrebbe rielaborato a
+        ogni chiamata successiva: più costo, più latenza e, con i piani gratuiti, il superamento dei limiti
+        di token per minuto del fornitore. I risultati del turno in corso restano integri.
+        """
+        limite = self.cfg.max_caratteri_risultati_storici
+        contesto = []
+        for i, m in enumerate(self.messaggi):
+            if i < inizio_turno and m.ruolo == "tool" and len(m.contenuto) > limite:
+                m = Messaggio(
+                    "tool",
+                    m.contenuto[:limite] + f"... [risultato di un turno precedente, accorciato: {len(m.contenuto)} "
+                    "caratteri in origine; richiamare il tool se servono i dettagli]",
+                    tool_call_id=m.tool_call_id,
+                    nome_tool=m.nome_tool,
+                )
+            contesto.append(m)
+        return contesto
+
     # ------------------------------------------------------------------ ciclo
 
     async def esegui_turno(self, testo_utente: str) -> EsitoTurno:
         self.turno += 1
+        inizio_turno = len(self.messaggi)
         inizio = time.perf_counter()
         self.messaggi.append(Messaggio("user", testo_utente))
         self.log.registra("richiesta_utente", self.turno, testo=testo_utente)
@@ -149,10 +191,21 @@ class Agent:
             )
             inviati_finora = len(self.messaggi)
             try:
-                r = await asyncio.to_thread(self.llm.chat, self.messaggi, list(self.strumenti.values()))
+                if hasattr(self.llm, "notifica_attesa"):
+                    # Le attese imposte dal fornitore (limiti di frequenza) diventano eventi visibili.
+                    self.llm.notifica_attesa = lambda secondi, tentativo, it=iterazione: self.log.registra(
+                        "attesa_fornitore", self.turno, it, secondi=round(secondi, 1), tentativo=tentativo
+                    )
+                r = await asyncio.to_thread(
+                    self.llm.chat, self._contesto_per_modello(inizio_turno), list(self.strumenti.values())
+                )
             except Exception as e:
                 self.log.registra("errore_modello", self.turno, iterazione, errore=f"{type(e).__name__}: {e}")
-                motivo = "errore_modello"
+                testo_errore = str(e).lower()
+                troppo_lungo = "413" in testo_errore or "too large" in testo_errore or "context length" in testo_errore
+                limite = "429" in testo_errore or "rate limit" in testo_errore
+                motivo = ("contesto_troppo_lungo" if troppo_lungo
+                          else "limite_fornitore" if limite else "errore_modello")
                 break
             chiamate_modello += 1
             uso.token_input += r.uso.token_input
@@ -277,7 +330,11 @@ class Agent:
 
         # c. human-in-the-loop per i tool con effetti di scrittura
         if spec.scrittura:
-            approvato = await asyncio.to_thread(self.conferma, spec, argomenti)
+            # La conferma può essere sincrona (terminale) o asincrona (attesa del clic nella web app).
+            if asyncio.iscoroutinefunction(self.conferma):
+                approvato = await self.conferma(spec, argomenti)
+            else:
+                approvato = await asyncio.to_thread(self.conferma, spec, argomenti)
             self.log.registra(
                 "conferma_utente", self.turno, iterazione, tool=nome, approvato=approvato,
                 riepilogo=riepilogo(spec, argomenti),

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Osteria del Borgo - Assistente</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+
+<!-- ============================================================ accesso -->
+<main id="vista-accesso" class="accesso" hidden>
+  <section class="accesso-scheda" aria-labelledby="titolo-accesso">
+    <h1 id="titolo-accesso" class="insegna">Osteria del Borgo</h1>
+    <p class="accesso-sottotitolo">Assistente per prenotazioni, menu e asporto</p>
+    <form id="form-accesso" autocomplete="on">
+      <label for="campo-username">Username</label>
+      <input id="campo-username" name="username" autocomplete="username" required>
+      <label for="campo-password">Password</label>
+      <input id="campo-password" name="password" type="password" autocomplete="current-password" required>
+      <p id="errore-accesso" class="errore" role="alert" hidden></p>
+      <button type="submit" class="primario">Entra</button>
+    </form>
+    <details class="demo">
+      <summary>Utenti dimostrativi</summary>
+      <p>Ogni ruolo vede strumenti diversi. Le credenziali di prova sono nel README del progetto.</p>
+      <ul id="elenco-demo">
+        <li><b>giulia</b>, <b>luca</b>: clienti</li>
+        <li><b>sala</b>: personale di sala</li>
+        <li><b>cucina</b>: cucina</li>
+        <li><b>admin</b>: amministratore</li>
+      </ul>
+    </details>
+  </section>
+</main>
+
+<!-- ============================================================ applicazione -->
+<div id="vista-app" class="app" hidden>
+  <header class="testata">
+    <span class="insegna insegna-piccola">Osteria del Borgo</span>
+    <div class="utente">
+      <span id="nome-utente"></span>
+      <span id="ruolo-utente" class="ruolo"></span>
+    </div>
+    <label class="scelta-modello">
+      <span>Modello</span>
+      <select id="scelta-modello"></select>
+    </label>
+    <nav class="azioni">
+      <button id="btn-nuova" type="button">Nuova conversazione</button>
+      <button id="btn-utenti" type="button" hidden>Gestisci utenti</button>
+      <button id="btn-esci" type="button">Esci</button>
+    </nav>
+  </header>
+
+  <section class="chat" aria-label="Conversazione">
+    <ol id="messaggi" class="messaggi" aria-live="polite"></ol>
+    <form id="form-chat" class="composizione">
+      <label for="campo-messaggio" class="nascosto">Scrivi all'assistente</label>
+      <textarea id="campo-messaggio" rows="2" maxlength="2000"
+                placeholder="Es. «Siamo in 4 sabato alle 20:30, c'è posto?»" required></textarea>
+      <button type="submit" id="btn-invia" class="primario">Invia</button>
+    </form>
+  </section>
+
+  <aside class="comanda" aria-labelledby="titolo-comanda">
+    <div class="comanda-carta">
+      <h2 id="titolo-comanda">Comanda dell'agente</h2>
+      <p class="comanda-nota">Ogni passo del ciclo: richieste al modello, strumenti usati, conferme.</p>
+      <ol id="traccia" class="traccia"></ol>
+    </div>
+    <p class="contatore">Token usati nella sessione: <b id="token-sessione">0</b></p>
+  </aside>
+</div>
+
+<!-- ============================================================ gestione utenti (solo admin) -->
+<dialog id="pannello-utenti" aria-labelledby="titolo-utenti">
+  <header class="pannello-testata">
+    <h2 id="titolo-utenti">Utenti e ruoli</h2>
+    <button id="btn-chiudi-utenti" type="button">Chiudi</button>
+  </header>
+  <table class="tabella-utenti">
+    <thead>
+      <tr><th scope="col">Utente</th><th scope="col">Nome</th><th scope="col">Ruolo</th><th scope="col">Stato</th><th scope="col">Nuova password</th></tr>
+    </thead>
+    <tbody id="righe-utenti"></tbody>
+  </table>
+  <p id="esito-utenti" class="esito" role="status"></p>
+  <form id="form-nuovo-utente" class="nuovo-utente">
+    <h3>Aggiungi un utente</h3>
+    <input name="username" placeholder="username" required aria-label="Username">
+    <input name="nome" placeholder="Nome e cognome" required aria-label="Nome e cognome">
+    <select name="ruolo" aria-label="Ruolo">
+      <option value="cliente">Cliente</option>
+      <option value="sala">Personale di sala</option>
+      <option value="cucina">Cucina</option>
+      <option value="admin">Amministratore</option>
+    </select>
+    <input name="telefono" placeholder="Telefono (clienti)" aria-label="Telefono">
+    <input name="password" type="password" placeholder="Password (min. 10 caratteri)" required minlength="10" aria-label="Password">
+    <button type="submit" class="primario">Aggiungi utente</button>
+  </form>
+</dialog>
+
+</body>
+</html>

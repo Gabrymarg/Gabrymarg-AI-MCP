@@ -5,6 +5,19 @@
 
 PRAGMA foreign_keys = ON;
 
+-- Utenti della web app. Il ruolo determina quali operazioni sono consentite (vedi backend/permessi.py).
+-- Le password sono salvate solo come hash scrypt con salt casuale.
+CREATE TABLE UTENTI (
+    id_utente     INTEGER PRIMARY KEY,
+    username      TEXT    NOT NULL UNIQUE,
+    password_hash TEXT    NOT NULL,
+    ruolo         TEXT    NOT NULL CHECK (ruolo IN ('cliente', 'sala', 'cucina', 'admin')),
+    nome          TEXT    NOT NULL,
+    telefono      TEXT,
+    attivo        INTEGER NOT NULL DEFAULT 1 CHECK (attivo IN (0, 1)),
+    creato_il     TEXT    NOT NULL
+);
+
 CREATE TABLE TAVOLI (
     id_tavolo   INTEGER PRIMARY KEY,
     nome        TEXT    NOT NULL UNIQUE,
@@ -35,6 +48,7 @@ CREATE TABLE PRENOTAZIONI (
     id_tavolo       INTEGER NOT NULL REFERENCES TAVOLI(id_tavolo),
     fonte           TEXT    NOT NULL DEFAULT 'telefono'
                     CHECK (fonte IN ('telefono', 'sito', 'agente')),
+    id_utente       INTEGER REFERENCES UTENTI(id_utente),  -- cliente registrato proprietario (facoltativo)
     creata_il       TEXT    NOT NULL,    -- ISO 8601
     modificata_il   TEXT
 );
@@ -99,6 +113,7 @@ CREATE TABLE ORDINI (
     totale        REAL NOT NULL CHECK (totale >= 0),
     note          TEXT,
     fonte         TEXT NOT NULL DEFAULT 'telefono' CHECK (fonte IN ('telefono', 'sito', 'agente')),
+    id_utente     INTEGER REFERENCES UTENTI(id_utente),  -- cliente registrato proprietario (facoltativo)
     creato_il     TEXT NOT NULL
 );
 

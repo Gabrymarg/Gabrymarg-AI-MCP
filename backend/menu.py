@@ -77,12 +77,14 @@ def _radici(testo: str) -> list[str]:
     return [p[: max(4, len(p) - 2)] for p in parole if p not in PAROLE_VUOTE and len(p) >= 3]
 
 
-def trova_piatto(conn: sqlite3.Connection, nome: str) -> int:
+def trova_piatto(conn: sqlite3.Connection, nome: str, includi_inattivi: bool = False) -> int:
     """Risolve il nome di un piatto (anche parziale o al plurale) nel suo id.
 
     Evita che il modello debba indovinare gli id: errore esplicito se il nome è ambiguo o assente.
     """
-    piatti = conn.execute("SELECT id_articolo, nome FROM ARTICOLI WHERE attivo = 1").fetchall()
+    piatti = conn.execute(
+        "SELECT id_articolo, nome FROM ARTICOLI" + ("" if includi_inattivi else " WHERE attivo = 1")
+    ).fetchall()
     cercato = _norm(nome)
     esatti = [p for p in piatti if _norm(p["nome"]) == cercato]
     if len(esatti) == 1:
@@ -226,3 +228,48 @@ def dettaglio_piatto(
         "asporto": bool(r["disponibile_asporto"]),
         "porzioni_disponibili": porzioni_disponibili(conn, id_articolo),
     }
+
+
+# --------------------------------------------------------------------------- amministrazione
+
+
+def _trova_ingrediente(conn: sqlite3.Connection, nome: str) -> sqlite3.Row:
+    ingredienti = conn.execute("SELECT * FROM INGREDIENTI").fetchall()
+    cercato = _norm(nome)
+    esatti = [i for i in ingredienti if _norm(i["nome"]) == cercato]
+    candidati = esatti or [i for i in ingredienti if all(r in _norm(i["nome"]) for r in _radici(nome))]
+    if len(candidati) == 1:
+        return candidati[0]
+    if len(candidati) > 1:
+        raise ErroreDominio("INGREDIENTE_AMBIGUO", f"Più ingredienti corrispondono a '{nome}'.",
+                            {"possibili_ingredienti": [i["nome"] for i in candidati]})
+    raise ErroreDominio("INGREDIENTE_INESISTENTE", f"Nessun ingrediente chiamato '{nome}'.",
+                        {"ingredienti_simili": difflib.get_close_matches(nome, [i["nome"] for i in ingredienti], n=3)})
+
+
+def aggiorna_scorta(
+    conn: sqlite3.Connection, ingrediente: str, quantita: float, modalita: str = "aggiungi"
+) -> dict[str, Any]:
+    """Carico di magazzino ('aggiungi') o inventario ('imposta') di un ingrediente."""
+    if modalita not in ("aggiungi", "imposta"):
+        raise ErroreDominio("MODALITA_NON_VALIDA", "Modalità ammesse: 'aggiungi' (carico) o 'imposta' (inventario).")
+    if quantita < 0 or quantita > 1_000_000:
+        raise ErroreDominio("QUANTITA_NON_VALIDA", "La quantità deve essere positiva e realistica.")
+    i = _trova_ingrediente(conn, ingrediente)
+    nuova = i["quantita_disponibile"] + quantita if modalita == "aggiungi" else quantita
+    conn.execute("UPDATE INGREDIENTI SET quantita_disponibile = ? WHERE id_ingrediente = ?", (nuova, i["id_ingrediente"]))
+    return {
+        "ingrediente": i["nome"],
+        "unita_misura": i["unita_misura"],
+        "quantita_precedente": i["quantita_disponibile"],
+        "quantita_attuale": nuova,
+        "sotto_scorta_minima": nuova < i["scorta_minima"],
+    }
+
+
+def imposta_disponibilita_piatto(conn: sqlite3.Connection, nome: str, disponibile: bool) -> dict[str, Any]:
+    """Toglie o rimette un piatto nel menu (es. piatto del giorno finito, ingrediente non di stagione)."""
+    id_articolo = trova_piatto(conn, nome, includi_inattivi=True)
+    conn.execute("UPDATE ARTICOLI SET attivo = ? WHERE id_articolo = ?", (int(disponibile), id_articolo))
+    r = conn.execute("SELECT nome, attivo FROM ARTICOLI WHERE id_articolo = ?", (id_articolo,)).fetchone()
+    return {"id_articolo": id_articolo, "nome": r["nome"], "nel_menu": bool(r["attivo"])}

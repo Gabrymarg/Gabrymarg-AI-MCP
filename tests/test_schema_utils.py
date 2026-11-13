@@ -12,10 +12,18 @@ def test_compatta_rimuove_null_title_e_ref():
     originale = _schema("crea_ordine_asporto")
     compatto = compatta_schema(originale)
     testo = str(compatto)
-    assert "title" not in testo and "$ref" not in testo and "'null'" not in testo
-    assert compatto["properties"]["righe"]["items"]["properties"]["id_articolo"]["type"] == "integer"
-    assert compatto["properties"]["note"]["type"] == "string"
+    assert "title" not in testo and "$ref" not in testo and "anyOf" not in testo
+    assert compatto["properties"]["righe"]["items"]["properties"]["id_articolo"]["type"] == ["integer", "null"]
+    # I campi facoltativi ammettono ancora null: i fornitori che validano lo schema non devono rifiutarli.
+    assert compatto["properties"]["note"]["type"] == ["string", "null"]
     assert compatto["required"] == originale["required"]
+
+
+def test_null_ammesso_nei_facoltativi_dello_schema_compatto():
+    """Regressione: Groq rifiutava (HTTP 400) le chiamate con null nei parametri facoltativi."""
+    compatto = compatta_schema(_schema("cerca_menu"))
+    argomenti_con_null = {"testo": None, "categoria": None, "escludi_allergeni": None}
+    assert not list(Draft202012Validator(compatto).iter_errors(argomenti_con_null))
 
 
 def test_conversione_tipi_secondo_schema():

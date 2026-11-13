@@ -99,6 +99,18 @@ def test_crea_e_trova_prenotazione(db):
     assert [t["id_prenotazione"] for t in trovate] == [p["id_prenotazione"]]
 
 
+def test_orari_disponibili(db):
+    conn, info = db
+    domani = prenotazioni.orari_disponibili(conn, "domani", 4)
+    assert domani["turni"]["pranzo"][0] == "12:00" and domani["turni"]["cena"][-1] == "22:00"
+    sabato = prenotazioni.orari_disponibili(conn, info["sabato_completo"], 4)
+    assert "20:00" not in sabato["turni"]["cena"] and "22:00" in sabato["turni"]["cena"]
+    oggi = prenotazioni.orari_disponibili(conn, "oggi", 2)  # sono le 11:00: niente orari già passati
+    assert all(o > "11:00" for o in oggi["turni"]["pranzo"])
+    lunedi = prenotazioni.orari_disponibili(conn, "lunedì", 2)
+    assert lunedi["chiuso"] and lunedi["turni"] == {}
+
+
 def test_trova_senza_filtri(db):
     conn, _ = db
     assert codice_errore(prenotazioni.trova_prenotazioni, conn) == "FILTRO_MANCANTE"

@@ -42,6 +42,10 @@ def _semplifica(nodo: Any) -> Any:
         if len(non_null) == 1:
             del nodo["anyOf"]
             nodo = {**non_null[0], **nodo}
+            # Il valore null resta ammesso ("type": [T, "null"]): alcuni fornitori (es. Groq) validano
+            # le chiamate generate dal modello rispetto allo schema e rifiutano un null non dichiarato.
+            if len(non_null) < len(varianti) and isinstance(nodo.get("type"), str):
+                nodo["type"] = [nodo["type"], "null"]
     if "properties" in nodo:
         nodo["properties"] = {k: _semplifica(v) for k, v in nodo["properties"].items()}
     return {k: (_semplifica(v) if k != "properties" else v) for k, v in nodo.items()}

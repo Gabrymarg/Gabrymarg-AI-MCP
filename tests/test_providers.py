@@ -35,8 +35,26 @@ def test_riprova_dopo_limite_di_frequenza():
     risposte = iter([httpx.Response(429, headers={"retry-after": "0"}, text="rate limit"),
                      httpx.Response(200, json=RISPOSTA_TOOL)])
     p = provider_con(lambda req: next(risposte))
+    notifiche = []
+    p.notifica_attesa = lambda secondi, tentativo: notifiche.append((secondi, tentativo))
     r = p.chat([Messaggio("user", "ciao")], [])
     assert r.tool_calls and p.attese_limite == 1
+    assert notifiche == [(0.0, 1)]  # l'attesa è stata segnalata prima di riprovare
+
+
+def test_limite_giornaliero_nessun_tentativo_inutile():
+    """Con il limite giornaliero (TPD) superato non si riprova: si fallisce subito con l'errore 429."""
+    chiamate = []
+
+    def gestore(req):
+        chiamate.append(1)
+        return httpx.Response(429, headers={"retry-after": "988"},
+                              text='{"error": {"message": "Rate limit reached ... on tokens per day (TPD)"}}')
+
+    p = provider_con(gestore)
+    with pytest.raises(RuntimeError, match="429"):
+        p.chat([Messaggio("user", "ciao")], [])
+    assert len(chiamate) == 1 and p.attese_limite == 0
 
 
 def test_errore_definitivo_senza_chiave_nel_messaggio():
