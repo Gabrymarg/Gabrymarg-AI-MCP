@@ -33,6 +33,7 @@ CAMPI_EVENTO = {
     "tipo", "iterazione", "turno", "tool", "argomenti", "ok", "errore", "risultato", "approvato",
     "token_input", "token_output", "durata_ms", "testo", "tool_calls", "motivo_arresto", "token_totali",
     "annullato_da_utente", "testo_respinto", "convertiti", "secondi", "tentativo",
+    "fase", "frammento", "ragionamento",
 }
 
 

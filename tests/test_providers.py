@@ -68,3 +68,35 @@ def test_groq_senza_chiave(monkeypatch):
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
     with pytest.raises(RuntimeError, match="GROQ_API_KEY"):
         GroqProvider("llama-3.3-70b-versatile")
+
+
+# ------------------------------------------------------------------ Ollama: streaming e ragionamento
+
+
+def test_ollama_streaming_e_ragionamento():
+    from types import SimpleNamespace as NS
+
+    from harness.llm.ollama_provider import OllamaProvider
+
+    def pezzo(contenuto="", pensiero=None, chiamate=None, fine=False):
+        return NS(message=NS(content=contenuto, thinking=pensiero, tool_calls=chiamate or []),
+                  prompt_eval_count=120 if fine else None, eval_count=30 if fine else None, model="finto")
+
+    class ClientFinto:
+        def show(self, modello):
+            return NS(capabilities=["completion", "tools", "thinking"])
+
+        def chat(self, stream=False, **richiesta):
+            assert stream and richiesta["think"] is True
+            chiamata = NS(function=NS(name="cerca_menu", arguments={"testo": "tiramisù"}))
+            return iter([pezzo(pensiero="Serve il menu. "), pezzo(pensiero="Cerco il dolce."),
+                         pezzo("Un attimo"), pezzo(chiamate=[chiamata]), pezzo(fine=True)])
+
+    p = OllamaProvider("finto")
+    p.client = ClientFinto()
+    ricevuti = []
+    p.notifica_flusso = lambda tipo, frammento: ricevuti.append((tipo, frammento))
+    r = p.chat([], [])
+    assert ricevuti == [("pensiero", "Serve il menu. "), ("pensiero", "Cerco il dolce."), ("testo", "Un attimo")]
+    assert r.ragionamento == "Serve il menu. Cerco il dolce." and r.testo == "Un attimo"
+    assert r.tool_calls[0].nome == "cerca_menu" and r.uso.token_input == 120 and r.uso.token_output == 30

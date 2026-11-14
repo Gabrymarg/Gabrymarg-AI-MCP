@@ -26,6 +26,7 @@ class OllamaProvider(LLMProvider):
         super().__init__(modello)
         self.client = ollama.Client(host=host, timeout=timeout)
         self.opzioni = {"temperature": temperatura, "num_ctx": contesto, "seed": 42}
+        self._ragiona: bool | None = None
 
     @staticmethod
     def _converti_messaggio(m: Messaggio) -> dict[str, Any]:
@@ -40,16 +41,43 @@ class OllamaProvider(LLMProvider):
     def _converti_tool(t: ToolSpec) -> dict[str, Any]:
         return {"type": "function", "function": {"name": t.nome, "description": t.descrizione, "parameters": t.parametri}}
 
+    def _sa_ragionare(self) -> bool:
+        """Il modello supporta la fase di ragionamento ("thinking")? Lo dichiara Ollama tra le capacità."""
+        if self._ragiona is None:
+            try:
+                self._ragiona = "thinking" in (self.client.show(self.modello).capabilities or [])
+            except Exception:
+                self._ragiona = False
+        return self._ragiona
+
     def chat(self, messaggi: list[Messaggio], strumenti: list[ToolSpec]) -> LLMResponse:
         inizio = time.perf_counter()
-        risposta = self.client.chat(
+        richiesta = dict(
             model=self.modello,
             messages=[self._converti_messaggio(m) for m in messaggi],
             tools=[self._converti_tool(t) for t in strumenti] or None,
             options=self.opzioni,
         )
+        if self._sa_ragionare():
+            richiesta["think"] = True
+        if self.notifica_flusso is None:
+            risposta = self.client.chat(**richiesta)
+            testo, pensiero = risposta.message.content or "", getattr(risposta.message, "thinking", None) or ""
+            tool_calls, finale = list(risposta.message.tool_calls or []), risposta
+        else:
+            # Streaming: i frammenti arrivano man mano che il modello li genera e vengono inoltrati.
+            testo, pensiero, tool_calls, finale = "", "", [], None
+            for pezzo in self.client.chat(**richiesta, stream=True):
+                if frammento := getattr(pezzo.message, "thinking", None):
+                    pensiero += frammento
+                    self.notifica_flusso("pensiero", frammento)
+                if frammento := pezzo.message.content:
+                    testo += frammento
+                    self.notifica_flusso("testo", frammento)
+                tool_calls += pezzo.message.tool_calls or []
+                finale = pezzo
         chiamate = []
-        for tc in risposta.message.tool_calls or []:
+        for tc in tool_calls:
             argomenti = tc.function.arguments
             if isinstance(argomenti, str):  # alcuni modelli restituiscono JSON come stringa
                 try:
@@ -58,9 +86,10 @@ class OllamaProvider(LLMProvider):
                     argomenti = {"_argomenti_non_json": argomenti}
             chiamate.append(ToolCall(id=uuid.uuid4().hex[:8], nome=tc.function.name, argomenti=dict(argomenti or {})))
         return LLMResponse(
-            testo=risposta.message.content or "",
+            testo=testo,
             tool_calls=chiamate,
-            uso=Uso(risposta.prompt_eval_count or 0, risposta.eval_count or 0),
-            modello=risposta.model or self.modello,
+            uso=Uso(finale.prompt_eval_count or 0, finale.eval_count or 0),
+            modello=finale.model or self.modello,
             durata_ms=int((time.perf_counter() - inizio) * 1000),
+            ragionamento=pensiero,
         )

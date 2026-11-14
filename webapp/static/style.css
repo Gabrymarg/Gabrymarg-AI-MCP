@@ -376,6 +376,17 @@ dialog::backdrop { background: rgb(20 30 25 / 0.45); }
 }
 .nuovo-utente h3 { grid-column: 1 / -1; margin: 0; font-size: 1rem; }
 
+/* Risposta in diretta: ragionamento in grigio, testo che compare mentre il modello lo scrive. */
+.pensiero-live { margin: 0.3rem 0; color: var(--grafite); font-size: 0.88rem; font-style: italic; }
+.pensiero-live summary { cursor: pointer; font-style: normal; font-weight: 600; }
+.pensiero-live p { margin: 0.3rem 0 0; max-height: 9rem; overflow: auto; white-space: pre-wrap; }
+.bozza { margin: 0.2rem 0 0; white-space: pre-wrap; }
+.bozza:empty, .stato-live:empty { display: none; }
+.stato-live { margin: 0.2rem 0 0; color: var(--grafite); font-style: italic; }
+.traccia .ragionamento { margin-top: 0.3rem; font-size: 0.82rem; color: var(--grafite); }
+.traccia .ragionamento summary { cursor: pointer; }
+.traccia .ragionamento p { margin: 0.25rem 0 0; white-space: pre-wrap; max-height: 12rem; overflow: auto; }
+
 .tabella-chat { border-collapse: collapse; margin: 0.4rem 0; font-size: 0.92rem; white-space: normal; }
 .tabella-chat th, .tabella-chat td { border-bottom: 1px solid var(--salvia); padding: 0.3rem 0.7rem 0.3rem 0; text-align: left; }
 .tabella-chat th { font-weight: 600; }

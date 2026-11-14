@@ -191,6 +191,11 @@ class Agent:
             )
             inviati_finora = len(self.messaggi)
             try:
+                # I frammenti generati (testo e ragionamento) vanno solo agli ascoltatori, non nel file di log:
+                # il testo completo e il ragionamento vengono registrati una volta, nella risposta_modello.
+                self.llm.notifica_flusso = lambda tipo, frammento, it=iterazione: self.log.notifica(
+                    "flusso_modello", iterazione=it, fase=tipo, frammento=frammento
+                )
                 if hasattr(self.llm, "notifica_attesa"):
                     # Le attese imposte dal fornitore (limiti di frequenza) diventano eventi visibili.
                     self.llm.notifica_attesa = lambda secondi, tentativo, it=iterazione: self.log.registra(
@@ -213,6 +218,7 @@ class Agent:
             self.log.registra(
                 "risposta_modello", self.turno, iterazione,
                 testo=r.testo,
+                ragionamento=r.ragionamento or None,
                 tool_calls=[{"nome": t.nome, "argomenti": t.argomenti} for t in r.tool_calls],
                 token_input=r.uso.token_input, token_output=r.uso.token_output, durata_ms=r.durata_ms,
             )

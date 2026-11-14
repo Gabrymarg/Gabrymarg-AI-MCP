@@ -278,6 +278,13 @@ function gestisciEvento(e, attesa) {
     case "richiesta_conferma":
       mostraConferma(e);
       break;
+    case "flusso_modello":
+      flussoInAttesa(attesa, e);
+      break;
+    case "risposta_modello":
+      chiudiFlusso(attesa, e);
+      passoDaEvento(e);
+      break;
     case "attesa_fornitore":
       attesa.lastChild.textContent =
         `Il servizio del modello ha raggiunto il limite di richieste al minuto del piano gratuito: ` +
@@ -287,6 +294,46 @@ function gestisciEvento(e, attesa) {
     default:
       passoDaEvento(e);
   }
+}
+
+// ------------------------------------------------------------------ risposta in diretta
+
+// Frammenti generati dal modello (streaming): il ragionamento, se il modello lo produce, e il testo.
+function preparaFlusso(attesa) {
+  if (!attesa.dataset.flusso) {
+    attesa.dataset.flusso = "1";
+    attesa.replaceChildren(crea("span", "firma", "Osteria del Borgo"));
+    const pensiero = crea("details", "pensiero-live");
+    pensiero.open = true;
+    pensiero.hidden = true;
+    pensiero.append(crea("summary", "", "Sto ragionando…"), crea("p"));
+    attesa.append(pensiero, crea("p", "bozza"), crea("p", "stato-live"));
+  }
+}
+
+function flussoInAttesa(attesa, e) {
+  preparaFlusso(attesa);
+  if (e.fase === "pensiero") {
+    const pensiero = attesa.querySelector(".pensiero-live");
+    pensiero.hidden = false;
+    pensiero.querySelector("p").textContent += e.frammento;
+  } else {
+    attesa.querySelector(".bozza").textContent += e.frammento;
+    attesa.querySelector(".stato-live").textContent = "";
+  }
+  attesa.scrollIntoView({ block: "end" });
+}
+
+// Fine di un'iterazione: la bozza si azzera (la risposta definitiva arriva a parte, già controllata
+// dall'harness) e, se il modello ha chiesto strumenti, si mostra cosa sta facendo.
+function chiudiFlusso(attesa, e) {
+  preparaFlusso(attesa);
+  const strumenti = (e.tool_calls || []).map((t) => ETICHETTE_TOOL[t.nome] || t.nome).join(", ");
+  attesa.querySelector(".bozza").textContent = "";
+  const pensiero = attesa.querySelector(".pensiero-live");
+  pensiero.querySelector("p").textContent = "";
+  pensiero.hidden = true;
+  attesa.querySelector(".stato-live").textContent = strumenti ? `Sto consultando: ${strumenti}…` : "Controllo la risposta…";
 }
 
 // ------------------------------------------------------------------ conferma umana
@@ -342,6 +389,11 @@ function passoDaEvento(e) {
       aggiungiPasso("modello", `Modello, iterazione ${e.iterazione}`,
         `${e.token_input} + ${e.token_output} token, ${(e.durata_ms / 1000).toFixed(1)} s · ` +
         (chiede.length ? `chiede: ${chiede.join(", ")}` : "risposta pronta"));
+      if (e.ragionamento) {
+        const dettagli = crea("details", "ragionamento");
+        dettagli.append(crea("summary", "", "Ragionamento del modello"), crea("p", "", e.ragionamento));
+        $("traccia").lastElementChild.append(dettagli);
+      }
       break;
     }
     case "chiamata_tool":

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 
 @dataclass
@@ -63,6 +63,7 @@ class LLMResponse:
     uso: Uso
     modello: str
     durata_ms: int = 0
+    ragionamento: str = ""  # "thinking" del modello, se il modello lo produce e il fornitore lo restituisce
 
 
 class LLMProvider(ABC):
@@ -70,6 +71,9 @@ class LLMProvider(ABC):
 
     def __init__(self, modello: str):
         self.modello = modello
+        # Facoltativa: funzione (tipo, frammento) chiamata durante la generazione, con tipo "pensiero" o
+        # "testo". Permette all'interfaccia di mostrare la risposta mentre il modello la scrive.
+        self.notifica_flusso: Callable[[str, str], None] | None = None
 
     @abstractmethod
     def chat(self, messaggi: list[Messaggio], strumenti: list[ToolSpec]) -> LLMResponse:

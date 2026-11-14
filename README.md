@@ -68,7 +68,7 @@ Poi aprire **http://127.0.0.1:8000**. La web app avvia automaticamente anche il 
 
 Le password degli utenti dimostrativi sono in `backend/seed.py` (`UTENTI_DEMO`): sono credenziali di prova, valide solo per il database locale.
 
-L'interfaccia mostra, accanto alla chat, la **comanda dell'agente**: ogni passo del ciclo in tempo reale (richieste al modello, token, strumenti usati, esiti, conferme, controlli dell'harness). Le operazioni che modificano i dati compaiono come scheda con i pulsanti *Conferma* e *Annulla*.
+L'interfaccia mostra, accanto alla chat, la **comanda dell'agente**: ogni passo del ciclo in tempo reale (richieste al modello, token, strumenti usati, esiti, conferme, controlli dell'harness). Le operazioni che modificano i dati compaiono come scheda con i pulsanti *Conferma* e *Annulla*. Con i modelli locali la risposta compare mentre il modello la scrive (streaming); se il modello produce un ragionamento (*thinking*, es. gpt-oss), questo è consultabile nella comanda sotto ogni iterazione.
 
 Per demo coerenti con i dati del seed conviene fissare l'orologio: `set RISTO_ADESSO=2026-12-03T11:00` (Windows) prima di `python -m backend.seed` e `python -m webapp`.
 
@@ -101,7 +101,7 @@ Il server MCP si può avviare anche da solo: `python -m mcp_server.server` (stdi
 ## Test
 
 ```bash
-python -m pytest                                                               # 138 test, non serve un modello
+python -m pytest                                                               # 139 test, non serve un modello
 python scenarios/run_scenarios.py --modello qwen2.5:3b                         # 16 scenari (ospite)
 python scenarios/run_scenarios.py --file scenari_ruoli.yaml --provider groq --modello openai/gpt-oss-20b   # 8 scenari per ruolo
 ```

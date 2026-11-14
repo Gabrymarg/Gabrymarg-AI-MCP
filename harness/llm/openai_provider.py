@@ -113,6 +113,7 @@ class OpenAICompatibileProvider(LLMProvider):
             uso=Uso(uso.get("prompt_tokens", 0), uso.get("completion_tokens", 0)),
             modello=dati.get("model", self.modello),
             durata_ms=int((time.perf_counter() - inizio) * 1000),
+            ragionamento=msg.get("reasoning") or msg.get("reasoning_content") or "",
         )
 
 

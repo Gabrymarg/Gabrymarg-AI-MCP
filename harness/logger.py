@@ -40,6 +40,12 @@ class LoggerJSONL:
             ascoltatore(evento)
         return evento
 
+    def notifica(self, tipo: str, **dati: Any) -> None:
+        """Evento transitorio (es. un frammento di testo in streaming): va agli ascoltatori, non nel file."""
+        evento = {"tipo": tipo, **dati}
+        for ascoltatore in self.ascoltatori:
+            ascoltatore(evento)
+
     def chiudi(self) -> None:
         self._file.close()
 
