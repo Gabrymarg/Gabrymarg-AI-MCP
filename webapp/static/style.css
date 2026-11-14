@@ -33,6 +33,20 @@
   }
 }
 
+/* Tema chiaro forzato (es. ?tema=chiaro): prevale sul tema scuro del sistema. */
+:root[data-tema="chiaro"] {
+  --carta: #f3f5f1;
+  --salvia: #dce5de;
+  --bottiglia: #2f5d50;
+  --bottiglia-scuro: #234639;
+  --inchiostro: #1e2823;
+  --grafite: #56635b;
+  --vino: #8c2341;
+  --oro: #b8901e;
+  --oro-chiaro: #f6edd2;
+  --bianco: #ffffff;
+}
+
 * { box-sizing: border-box; }
 
 html, body { height: 100%; }

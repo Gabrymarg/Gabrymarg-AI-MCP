@@ -4,6 +4,16 @@
 "use strict";
 
 const $ = (id) => document.getElementById(id);
+
+// Tema: ?tema=chiaro (o scuro / sistema) viene ricordato nel browser.
+(() => {
+  let tema = new URLSearchParams(location.search).get("tema");
+  try {
+    if (tema) localStorage.setItem("tema", tema);
+    else tema = localStorage.getItem("tema");
+  } catch (_) { /* archiviazione non disponibile */ }
+  if (tema === "chiaro") document.documentElement.dataset.tema = "chiaro";
+})();
 const stato = { profilo: null, occupato: false, tokenSessione: 0 };
 
 const ETICHETTE_TOOL = {
@@ -138,10 +148,21 @@ $("btn-nuova").addEventListener("click", async () => {
 
 // ------------------------------------------------------------------ chat
 
+// Resa minima e sicura del Markdown usato dai modelli: **grassetto** ed elenchi "- ".
+// Si costruiscono nodi DOM (mai innerHTML), quindi il testo non può iniettare codice.
+function testoFormattato(testo) {
+  const frammento = document.createDocumentFragment();
+  for (const parte of testo.replace(/^(\s*)[-*] /gm, "$1• ").split(/(\*\*[^*\n]+\*\*)/)) {
+    if (/^\*\*[^*\n]+\*\*$/.test(parte)) frammento.append(crea("strong", "", parte.slice(2, -2)));
+    else if (parte) frammento.append(document.createTextNode(parte));
+  }
+  return frammento;
+}
+
 function aggiungiMessaggio(tipo, testo) {
   const li = crea("li", `messaggio ${tipo}`);
   if (tipo === "assistente") li.append(crea("span", "firma", "Osteria del Borgo"));
-  li.append(document.createTextNode(testo));
+  li.append(tipo === "assistente" ? testoFormattato(testo) : document.createTextNode(testo));
   $("messaggi").append(li);
   li.scrollIntoView({ block: "end" });
   return li;
