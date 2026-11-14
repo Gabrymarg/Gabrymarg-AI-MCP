@@ -81,6 +81,9 @@ async function mostraApp(profilo) {
   $("btn-utenti").hidden = profilo.ruolo !== "admin";
   $("btn-menu").hidden = profilo.ruolo !== "admin";
   $("btn-cruscotto").hidden = profilo.ruolo !== "admin";
+  // Le scelte dei pannelli non devono passare da un utente all'altro (uscita e accesso senza ricaricare la pagina).
+  $("storico-tutte").checked = false;
+  for (const dialogo of document.querySelectorAll("dialog[open]")) dialogo.close();
   const scelta = $("scelta-modello");
   scelta.replaceChildren(...profilo.modelli.map((m) => {
     const opzione = crea("option", "", m.etichetta);
