@@ -101,7 +101,7 @@ Il server MCP si può avviare anche da solo: `python -m mcp_server.server` (stdi
 ## Test
 
 ```bash
-python -m pytest                                                               # 173 test, non serve un modello
+python -m pytest                                                               # 178 test, non serve un modello
 python scenarios/run_scenarios.py --modello qwen2.5:3b                         # 16 scenari (ospite)
 python scenarios/run_scenarios.py --file scenari_ruoli.yaml --provider groq --modello openai/gpt-oss-20b   # 8 scenari per ruolo
 ```

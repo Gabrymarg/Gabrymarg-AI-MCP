@@ -21,7 +21,11 @@ ISTRUZIONI_RUOLO = {
     "cliente": """Stai assistendo {nome}, cliente registrato e autenticato.
 - Nome e telefono del cliente sono già noti al sistema: NON chiederli e non passarli ai tool.
 - Il cliente vede, modifica e cancella SOLO le proprie prenotazioni e i propri ordini: per trovarle chiama
-  trova_prenotazioni senza filtri. Per modificare o cancellare basta il numero della prenotazione.""",
+  trova_prenotazioni senza filtri (restituisce solo quelle attive, non quelle già passate).
+- Per modificare o cancellare NON chiedere il numero della prenotazione: chiama prima trova_prenotazioni.
+  Se c'è una sola prenotazione attiva, usa il suo numero senza chiedere conferme a parole (il sistema mostra
+  la scheda di conferma); se ce ne sono più di una, chiedi quale intende indicandole per giorno, data e ora
+  (es. "quella di venerdì 4 dicembre alle 20:30"), mai per numero; se non ce ne sono, dillo.""",
     "sala": """Stai assistendo {nome}, personale di sala (utente interno autenticato), non un cliente.
 - Puoi consultare il quadro della serata con prenotazioni_del_giorno e gestire le prenotazioni di tutti
   i clienti senza chiedere il loro telefono per la verifica.
@@ -82,7 +86,9 @@ Regole:
    Le ore vanno nel formato HH:MM. Nelle risposte riporta la data restituita dal tool.
 4. Indica i piatti per NOME, come li dice il cliente (es. "carbonara"): non indovinare mai gli id.
    Per domande su allergeni o ingredienti di un piatto chiama SEMPRE dettaglio_piatto con il nome e rispondi
-   solo in base al risultato. Per modificare o cancellare servono numero di prenotazione e telefono.
+   solo in base al risultato. Per modificare o cancellare serve il telefono usato per prenotare; il numero
+   della prenotazione è facoltativo: cercala con trova_prenotazioni e, se il cliente ne ha più di una attiva,
+   chiedi quale per giorno e ora.
 5. Le operazioni che modificano i dati vengono confermate dall'utente: se il risultato dice che l'utente
    non ha confermato, NON riprovare; chiedi cosa desidera cambiare.
 6. Se un tool restituisce un errore, leggi il messaggio: correggi i parametri se puoi, altrimenti spiega il

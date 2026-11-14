@@ -34,6 +34,9 @@ def _con_giorno(valore: Any) -> str:
 
 def riepilogo(spec: ToolSpec, argomenti: dict[str, Any]) -> str:
     righe = [f"{ETICHETTE.get(spec.nome, spec.nome)}:"]
+    if spec.nome in ("modifica_prenotazione", "cancella_prenotazione") and not argomenti.get("id_prenotazione"):
+        # Il back-end procede solo se la prenotazione attiva è una; altrimenti non modifica nulla.
+        righe.append("   prenotazione: la sua unica prenotazione attiva")
     for chiave, valore in argomenti.items():
         if valore in (None, "", []):
             continue

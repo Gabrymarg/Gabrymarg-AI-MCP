@@ -141,6 +141,11 @@ DESCR_DATA = (
     "il nome del giorno (es. 'sabato') o giorno e mese (es. '24 dicembre'): il sistema le converte "
     "nella data corretta."
 )
+DESCR_ID_PRENOTAZIONE = (
+    "Numero della prenotazione. Facoltativo: se manca, il sistema usa l'unica prenotazione ATTIVA del cliente "
+    "(cliente registrato, oppure ospite tramite telefono); se il cliente ne ha più di una restituisce l'elenco, "
+    "da cui chiedere quale intende per giorno e ora."
+)
 DESCR_TELEFONO_VERIFICA = (
     "Telefono usato per la prenotazione o l'ordine (verifica dell'identità). "
     "Non serve per i clienti registrati né per il personale."
@@ -330,7 +335,7 @@ def crea_prenotazione(
 @mcp.tool(annotations=SCRITTURA)
 @tool_protetto
 def modifica_prenotazione(
-    id_prenotazione: Annotated[int, Field(description="Numero della prenotazione.")],
+    id_prenotazione: Annotated[int | None, Field(description=DESCR_ID_PRENOTAZIONE)] = None,
     telefono: Annotated[str | None, Field(description=DESCR_TELEFONO_VERIFICA)] = None,
     data: Annotated[str | None, Field(description="Nuova data. " + DESCR_DATA)] = None,
     ora: Annotated[str | None, Field(description="Nuova ora HH:MM.")] = None,
@@ -350,7 +355,7 @@ def modifica_prenotazione(
 @mcp.tool(annotations=SCRITTURA_DISTRUTTIVA)
 @tool_protetto
 def cancella_prenotazione(
-    id_prenotazione: Annotated[int, Field(description="Numero della prenotazione.")],
+    id_prenotazione: Annotated[int | None, Field(description=DESCR_ID_PRENOTAZIONE)] = None,
     telefono: Annotated[str | None, Field(description=DESCR_TELEFONO_VERIFICA)] = None,
 ) -> Prenotazione:
     """Cancella una prenotazione esistente. SCRIVE sui dati e non è annullabile."""

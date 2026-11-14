@@ -185,6 +185,40 @@ def _carica_verificata(
     return r
 
 
+GIORNI = ("lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica")
+
+
+def _risolvi_id(conn: sqlite3.Connection, id_prenotazione: int | None, telefono: str | None, utente: Utente) -> int:
+    """Se il numero non è indicato, individua la prenotazione tra quelle ATTIVE del cliente.
+
+    Il cliente non deve conoscere il numero della propria prenotazione: un cliente registrato è identificato
+    dal login, un ospite dal telefono. Con una sola prenotazione attiva si usa quella; con più prenotazioni
+    l'errore elenca data, giorno e ora, così l'assistente può chiedere quale senza parlare di numeri.
+    """
+    if id_prenotazione is not None:
+        return id_prenotazione
+    if not (utente.cliente_registrato or telefono):
+        raise ErroreDominio(
+            "PRENOTAZIONE_DA_INDICARE",
+            "Per trovare la prenotazione serve il telefono con cui è stata fatta (o il suo numero).",
+        )
+    attive = trova_prenotazioni(conn, telefono=None if utente.cliente_registrato else telefono, utente=utente)
+    if not attive:
+        raise ErroreDominio("NESSUNA_PRENOTAZIONE_ATTIVA", "Non risultano prenotazioni attive da modificare.")
+    if len(attive) > 1:
+        raise ErroreDominio(
+            "PIU_PRENOTAZIONI_ATTIVE",
+            f"Il cliente ha {len(attive)} prenotazioni attive: chiedere quale intende, indicandole per giorno, "
+            "data e ora (non per numero).",
+            {"prenotazioni_attive": [
+                {"id_prenotazione": p["id_prenotazione"], "giorno": GIORNI[date.fromisoformat(p["data"]).weekday()],
+                 "data": p["data"], "ora": p["ora"], "coperti": p["coperti"]}
+                for p in attive
+            ]},
+        )
+    return attive[0]["id_prenotazione"]
+
+
 # --------------------------------------------------------------------------- operazioni
 
 
@@ -305,8 +339,10 @@ def trova_prenotazioni(
         condizioni.append("p.data = ?")
         parametri.append(parse_data(data).isoformat())
     if not includi_passate:
-        condizioni.append("p.data >= ?")
-        parametri.append(clock.adesso().date().isoformat())
+        # Solo le prenotazioni attive: future, oppure di oggi con l'orario non ancora passato.
+        adesso = clock.adesso()
+        condizioni.append("(p.data > ? OR (p.data = ? AND p.ora > ?))")
+        parametri += [adesso.date().isoformat(), adesso.date().isoformat(), f"{adesso:%H:%M}"]
     righe = conn.execute(
         _SELECT_PRENOTAZIONE + " WHERE " + " AND ".join(condizioni) + " ORDER BY p.data, p.ora LIMIT 20",
         parametri,
@@ -316,7 +352,7 @@ def trova_prenotazioni(
 
 def modifica_prenotazione(
     conn: sqlite3.Connection,
-    id_prenotazione: int,
+    id_prenotazione: int | None,
     telefono: str | None,
     data: str | None = None,
     ora: str | None = None,
@@ -324,9 +360,10 @@ def modifica_prenotazione(
     note: str | None = None,
     utente: Utente = OSPITE,
 ) -> dict[str, Any]:
-    attuale = _carica_verificata(conn, id_prenotazione, telefono, utente)
     if data is None and ora is None and coperti is None and note is None:
         raise ErroreDominio("NESSUNA_MODIFICA", "Indicare almeno un campo da modificare.")
+    id_prenotazione = _risolvi_id(conn, id_prenotazione, telefono, utente)
+    attuale = _carica_verificata(conn, id_prenotazione, telefono, utente)
     giorno = parse_data(data) if data else date.fromisoformat(attuale["data"])
     orario = parse_ora(ora) if ora else time.fromisoformat(attuale["ora"])
     n_coperti = coperti if coperti is not None else attuale["coperti"]
@@ -363,8 +400,9 @@ def modifica_prenotazione(
 
 
 def cancella_prenotazione(
-    conn: sqlite3.Connection, id_prenotazione: int, telefono: str | None, utente: Utente = OSPITE
+    conn: sqlite3.Connection, id_prenotazione: int | None, telefono: str | None, utente: Utente = OSPITE
 ) -> dict[str, Any]:
+    id_prenotazione = _risolvi_id(conn, id_prenotazione, telefono, utente)
     _carica_verificata(conn, id_prenotazione, telefono, utente)
     conn.execute(
         "UPDATE PRENOTAZIONI SET stato = 'cancellata', modificata_il = ? WHERE id_prenotazione = ?",

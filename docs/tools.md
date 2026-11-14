@@ -13,8 +13,8 @@ Gli esempi sono stati eseguiti realmente via HTTP, come amministratore, su un da
 | `orari_disponibili` | lettura | ospite, cliente, sala, cucina, admin | data, coperti |
 | `trova_prenotazioni` | lettura | ospite, cliente, sala, admin | - |
 | `crea_prenotazione` | scrittura | ospite, cliente, sala, admin | data, ora, coperti |
-| `modifica_prenotazione` | scrittura | ospite, cliente, sala, admin | id_prenotazione |
-| `cancella_prenotazione` | scrittura distruttiva | ospite, cliente, sala, admin | id_prenotazione |
+| `modifica_prenotazione` | scrittura | ospite, cliente, sala, admin | - |
+| `cancella_prenotazione` | scrittura distruttiva | ospite, cliente, sala, admin | - |
 | `prenotazioni_del_giorno` | lettura | sala, admin | data |
 | `crea_ordine_asporto` | scrittura | ospite, cliente, sala, admin | righe, ora_ritiro |
 | `stato_ordine` | lettura | ospite, cliente, sala, cucina, admin | id_ordine |
@@ -1218,9 +1218,17 @@ Indicare solo i campi da cambiare. Se non c'è posto la prenotazione resta invar
   "type": "object",
   "properties": {
     "id_prenotazione": {
-      "description": "Numero della prenotazione.",
-      "title": "Id Prenotazione",
-      "type": "integer"
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Numero della prenotazione. Facoltativo: se manca, il sistema usa l'unica prenotazione ATTIVA del cliente (cliente registrato, oppure ospite tramite telefono); se il cliente ne ha più di una restituisce l'elenco, da cui chiedere quale intende per giorno e ora.",
+      "title": "Id Prenotazione"
     },
     "telefono": {
       "anyOf": [
@@ -1289,9 +1297,6 @@ Indicare solo i campi da cambiare. Se non c'è posto la prenotazione resta invar
       "title": "Note"
     }
   },
-  "required": [
-    "id_prenotazione"
-  ],
   "title": "modifica_prenotazioneArguments"
 }
 ```
@@ -1411,9 +1416,17 @@ Cancella una prenotazione esistente. SCRIVE sui dati e non è annullabile.
   "type": "object",
   "properties": {
     "id_prenotazione": {
-      "description": "Numero della prenotazione.",
-      "title": "Id Prenotazione",
-      "type": "integer"
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Numero della prenotazione. Facoltativo: se manca, il sistema usa l'unica prenotazione ATTIVA del cliente (cliente registrato, oppure ospite tramite telefono); se il cliente ne ha più di una restituisce l'elenco, da cui chiedere quale intende per giorno e ora.",
+      "title": "Id Prenotazione"
     },
     "telefono": {
       "anyOf": [
@@ -1429,9 +1442,6 @@ Cancella una prenotazione esistente. SCRIVE sui dati e non è annullabile.
       "title": "Telefono"
     }
   },
-  "required": [
-    "id_prenotazione"
-  ],
   "title": "cancella_prenotazioneArguments"
 }
 ```
