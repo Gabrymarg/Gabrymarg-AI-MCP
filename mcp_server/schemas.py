@@ -131,6 +131,20 @@ class ElencoOrdini(BaseModel):
     ordini: list[Ordine]
 
 
+class Giacenza(BaseModel):
+    ingrediente: str
+    unita_misura: str
+    quantita_disponibile: float
+    scorta_minima: float
+    sotto_scorta_minima: bool
+
+
+class Giacenze(BaseModel):
+    numero_ingredienti: int
+    sotto_scorta: int = Field(description="Quanti ingredienti sono sotto la scorta minima.")
+    ingredienti: list[Giacenza]
+
+
 class EsitoScorta(BaseModel):
     ingrediente: str
     unita_misura: str

@@ -31,6 +31,7 @@ const ETICHETTE_TOOL = {
   stato_ordine: "Stato ordine",
   ordini_da_preparare: "Ordini da preparare",
   aggiorna_stato_ordine: "Aggiornamento stato ordine",
+  giacenze_ingredienti: "Giacenze di magazzino",
   aggiorna_scorta: "Aggiornamento scorta",
   imposta_disponibilita_piatto: "Disponibilità piatto",
 };
@@ -78,6 +79,7 @@ async function mostraApp(profilo) {
   $("nome-utente").textContent = profilo.nome;
   $("ruolo-utente").textContent = profilo.descrizione_ruolo;
   $("btn-utenti").hidden = profilo.ruolo !== "admin";
+  $("btn-menu").hidden = profilo.ruolo !== "admin";
   const scelta = $("scelta-modello");
   scelta.replaceChildren(...profilo.modelli.map((m) => {
     const opzione = crea("option", "", m.etichetta);
@@ -148,14 +150,53 @@ $("btn-nuova").addEventListener("click", async () => {
 
 // ------------------------------------------------------------------ chat
 
-// Resa minima e sicura del Markdown usato dai modelli: **grassetto** ed elenchi "- ".
+// Resa minima e sicura del Markdown usato dai modelli: **grassetto**, elenchi "- " e tabelle "| a | b |".
 // Si costruiscono nodi DOM (mai innerHTML), quindi il testo non può iniettare codice.
-function testoFormattato(testo) {
+function testoInLinea(testo) {
   const frammento = document.createDocumentFragment();
   for (const parte of testo.replace(/^(\s*)[-*] /gm, "$1• ").split(/(\*\*[^*\n]+\*\*)/)) {
     if (/^\*\*[^*\n]+\*\*$/.test(parte)) frammento.append(crea("strong", "", parte.slice(2, -2)));
     else if (parte) frammento.append(document.createTextNode(parte));
   }
+  return frammento;
+}
+
+function tabellaMarkdown(righe) {
+  const celle = (riga) => riga.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+  const corpo = righe.filter((r) => !/^\s*\|?[\s:|-]+\|?\s*$/.test(r));  // toglie la riga |---|---|
+  const tabella = crea("table", "tabella-chat");
+  corpo.forEach((riga, i) => {
+    const tr = crea("tr");
+    for (const c of celle(riga)) {
+      const td = crea(i === 0 ? "th" : "td");
+      td.append(testoInLinea(c));
+      tr.append(td);
+    }
+    tabella.append(tr);
+  });
+  return tabella;
+}
+
+function testoFormattato(testo) {
+  const frammento = document.createDocumentFragment();
+  const righe = testo.split("\n");
+  let testoNormale = [];
+  const svuota = () => {
+    if (testoNormale.length) frammento.append(testoInLinea(testoNormale.join("\n")));
+    testoNormale = [];
+  };
+  for (let i = 0; i < righe.length; i++) {
+    if (/^\s*\|.*\|\s*$/.test(righe[i]) && /^\s*\|?[\s:|-]+\|?\s*$/.test(righe[i + 1] || "")) {
+      svuota();
+      const blocco = [];
+      while (i < righe.length && /^\s*\|.*\|\s*$/.test(righe[i])) blocco.push(righe[i++]);
+      i--;
+      frammento.append(tabellaMarkdown(blocco));
+    } else {
+      testoNormale.push(righe[i]);
+    }
+  }
+  svuota();
   return frammento;
 }
 
@@ -430,6 +471,273 @@ $("form-nuovo-utente").addEventListener("submit", async (evento) => {
     esitoUtenti(e.message, true);
   }
 });
+
+// ------------------------------------------------------------------ menu e magazzino (admin)
+
+const menu = { dati: null, modifica: { articoli: null, ingredienti: null, categorie: null } };
+const euro = (n) => n.toLocaleString("it-IT", { style: "currency", currency: "EUR" });
+const quantita = (n, unita) => `${n.toLocaleString("it-IT", { maximumFractionDigits: 2 })} ${unita}`;
+
+function esitoMenu(testo, errore = false) {
+  const el = $("esito-menu");
+  el.textContent = testo;
+  el.classList.toggle("errore", errore);
+}
+
+function pulsante(testo, classe, azione) {
+  const b = crea("button", classe, testo);
+  b.type = "button";
+  b.addEventListener("click", azione);
+  return b;
+}
+
+// Eliminazione in due clic: il primo chiede conferma, il secondo (entro 4 secondi) elimina.
+function pulsanteElimina(descrizione, azione) {
+  const b = pulsante("Elimina", "", () => {
+    if (b.dataset.armato) return azione();
+    b.dataset.armato = "1";
+    b.textContent = "Conferma eliminazione";
+    b.classList.add("distruttivo");
+    b.setAttribute("aria-label", `Conferma l'eliminazione di ${descrizione}`);
+    setTimeout(() => {
+      delete b.dataset.armato;
+      b.textContent = "Elimina";
+      b.classList.remove("distruttivo");
+      b.removeAttribute("aria-label");
+    }, 4000);
+  });
+  return b;
+}
+
+async function salvaAnagrafica(tipo, corpo, descrizione) {
+  const id = menu.modifica[tipo];
+  try {
+    await api(`/api/admin/${tipo}${id ? `/${id}` : ""}`, { metodo: id ? "PUT" : "POST", corpo });
+    const o = tipo === "categorie" ? "a" : "o";
+    esitoMenu(`${descrizione} ${id ? "aggiornat" : "aggiunt"}${o}`);
+    chiudiForm(tipo);
+    await caricaMenu();
+    return true;
+  } catch (e) {
+    esitoMenu(e.message, true);
+    return false;
+  }
+}
+
+async function eliminaAnagrafica(tipo, id, descrizione) {
+  try {
+    await api(`/api/admin/${tipo}/${id}`, { metodo: "DELETE" });
+    esitoMenu(`${descrizione} eliminat${tipo === "categorie" ? "a" : "o"}`);
+    await caricaMenu();
+  } catch (e) {
+    esitoMenu(e.message, true);
+  }
+}
+
+const FORM = { articoli: "form-articolo", ingredienti: "form-ingrediente", categorie: "form-categoria" };
+const TITOLI_NUOVO = { articoli: "Nuovo articolo", ingredienti: "Nuovo ingrediente", categorie: "Nuova categoria" };
+
+function chiudiForm(tipo) {
+  menu.modifica[tipo] = null;
+  const form = $(FORM[tipo]);
+  form.reset();
+  $(`titolo-${FORM[tipo]}`).textContent = TITOLI_NUOVO[tipo];
+  if (tipo === "articoli") form.hidden = true;
+}
+
+// --- articoli
+
+function rigaRicetta(riga = {}) {
+  const li = crea("li");
+  const scelta = crea("select");
+  scelta.setAttribute("aria-label", "Ingrediente");
+  for (const i of menu.dati.ingredienti) {
+    const o = crea("option", "", `${i.nome} (${i.unita_misura})`);
+    o.value = i.id_ingrediente;
+    o.selected = i.id_ingrediente === riga.id_ingrediente;
+    scelta.append(o);
+  }
+  const q = crea("input");
+  Object.assign(q, { type: "number", min: "0", step: "any", required: true, value: riga.quantita ?? "" });
+  q.setAttribute("aria-label", "Quantità per porzione");
+  li.append(scelta, q, pulsante("Togli", "", () => li.remove()));
+  return li;
+}
+
+function apriArticolo(a) {
+  const form = $("form-articolo");
+  menu.modifica.articoli = a ? a.id_articolo : null;
+  form.reset();
+  $("titolo-form-articolo").textContent = a ? `Modifica: ${a.nome}` : "Nuovo articolo";
+  form.elements.id_categoria.replaceChildren(...menu.dati.categorie.map((c) => {
+    const o = crea("option", "", c.nome);
+    o.value = c.id_categoria;
+    return o;
+  }));
+  if (a) {
+    for (const campo of ["nome", "descrizione", "prezzo", "id_categoria"]) form.elements[campo].value = a[campo];
+  }
+  form.elements.vegetariano.checked = a ? a.vegetariano : false;
+  form.elements.asporto.checked = a ? a.asporto : true;
+  form.elements.attivo.checked = a ? a.attivo : true;
+  $("spunte-allergeni").replaceChildren(...menu.dati.allergeni.map((al) => {
+    const etichetta = crea("label");
+    const spunta = crea("input");
+    Object.assign(spunta, { type: "checkbox", name: "allergene", value: al.codice, checked: !!a?.allergeni.includes(al.codice) });
+    etichetta.append(spunta, ` ${al.nome}`);
+    return etichetta;
+  }));
+  $("righe-ricetta").replaceChildren(...(a ? a.ricetta.map(rigaRicetta) : []));
+  form.hidden = false;
+  form.scrollIntoView({ block: "start", behavior: "smooth" });
+  form.elements.nome.focus();
+}
+
+function disegnaArticoli() {
+  const filtro = $("filtro-articoli").value.trim().toLowerCase();
+  const righe = menu.dati.articoli
+    .filter((a) => !filtro || a.nome.toLowerCase().includes(filtro))
+    .map((a) => {
+      const tr = crea("tr", a.attivo ? "" : "disattivo");
+      const stato = [a.attivo ? "Nel menu" : "Fuori menu", a.vegetariano ? "vegetariano" : "", a.asporto ? "" : "no asporto"]
+        .filter(Boolean).join(", ");
+      const azioni = crea("td", "azioni-riga");
+      azioni.append(pulsante("Modifica", "", () => apriArticolo(a)));
+      tr.append(crea("td", "", a.nome), crea("td", "", a.categoria), crea("td", "num", euro(a.prezzo)),
+        crea("td", "allergeni-cella", a.allergeni.join(", ") || "nessuno"), crea("td", "", stato), azioni);
+      return tr;
+    });
+  $("righe-articoli").replaceChildren(...righe);
+}
+
+$("form-articolo").addEventListener("submit", (evento) => {
+  evento.preventDefault();
+  const f = evento.target.elements;
+  const corpo = {
+    nome: f.nome.value,
+    descrizione: f.descrizione.value,
+    prezzo: Number(f.prezzo.value),
+    id_categoria: Number(f.id_categoria.value),
+    vegetariano: f.vegetariano.checked,
+    asporto: f.asporto.checked,
+    attivo: f.attivo.checked,
+    allergeni: [...evento.target.querySelectorAll("input[name=allergene]:checked")].map((s) => s.value),
+    ricetta: [...$("righe-ricetta").children].map((li) => ({
+      id_ingrediente: Number(li.querySelector("select").value),
+      quantita: Number(li.querySelector("input").value),
+    })),
+  };
+  salvaAnagrafica("articoli", corpo, `Articolo ${corpo.nome}`);
+});
+
+$("btn-nuovo-articolo").addEventListener("click", () => apriArticolo(null));
+$("btn-aggiungi-riga").addEventListener("click", () => $("righe-ricetta").append(rigaRicetta()));
+$("filtro-articoli").addEventListener("input", disegnaArticoli);
+
+// --- ingredienti
+
+function disegnaIngredienti() {
+  const filtro = $("filtro-ingredienti").value.trim().toLowerCase();
+  const soloSotto = $("solo-sotto-scorta").checked;
+  const righe = menu.dati.ingredienti
+    .filter((i) => (!filtro || i.nome.toLowerCase().includes(filtro)) && (!soloSotto || i.sotto_scorta_minima))
+    .map((i) => {
+      const tr = crea("tr", i.sotto_scorta_minima ? "sotto-scorta" : "");
+      const disponibile = crea("td", "num", quantita(i.quantita_disponibile, i.unita_misura));
+      if (i.sotto_scorta_minima) disponibile.append(crea("span", "segnale", "sotto scorta"));
+      const azioni = crea("td", "azioni-riga");
+      azioni.append(pulsante("Modifica", "", () => {
+        const f = $("form-ingrediente").elements;
+        menu.modifica.ingredienti = i.id_ingrediente;
+        for (const campo of ["nome", "unita_misura", "quantita_disponibile", "scorta_minima"]) f[campo].value = i[campo];
+        $("titolo-form-ingrediente").textContent = `Modifica: ${i.nome}`;
+        f.quantita_disponibile.focus();
+      }));
+      if (!i.numero_ricette) azioni.append(pulsanteElimina(i.nome, () => eliminaAnagrafica("ingredienti", i.id_ingrediente, `Ingrediente ${i.nome}`)));
+      tr.append(crea("td", "", i.nome), disponibile, crea("td", "num", quantita(i.scorta_minima, i.unita_misura)),
+        crea("td", "num", String(i.numero_ricette)), azioni);
+      return tr;
+    });
+  $("righe-ingredienti").replaceChildren(...righe);
+}
+
+$("form-ingrediente").addEventListener("submit", (evento) => {
+  evento.preventDefault();
+  const f = evento.target.elements;
+  salvaAnagrafica("ingredienti", {
+    nome: f.nome.value,
+    unita_misura: f.unita_misura.value,
+    quantita_disponibile: Number(f.quantita_disponibile.value),
+    scorta_minima: Number(f.scorta_minima.value),
+  }, `Ingrediente ${f.nome.value}`);
+});
+
+$("filtro-ingredienti").addEventListener("input", disegnaIngredienti);
+$("solo-sotto-scorta").addEventListener("change", disegnaIngredienti);
+
+// --- categorie
+
+function disegnaCategorie() {
+  const righe = menu.dati.categorie.map((c) => {
+    const tr = crea("tr");
+    const azioni = crea("td", "azioni-riga");
+    azioni.append(pulsante("Modifica", "", () => {
+      const f = $("form-categoria").elements;
+      menu.modifica.categorie = c.id_categoria;
+      f.nome.value = c.nome;
+      f.ordine.value = c.ordine;
+      $("titolo-form-categoria").textContent = `Modifica: ${c.nome}`;
+      f.nome.focus();
+    }));
+    if (!c.numero_articoli) azioni.append(pulsanteElimina(c.nome, () => eliminaAnagrafica("categorie", c.id_categoria, `Categoria ${c.nome}`)));
+    tr.append(crea("td", "num", String(c.ordine)), crea("td", "", c.nome), crea("td", "num", String(c.numero_articoli)), azioni);
+    return tr;
+  });
+  $("righe-categorie").replaceChildren(...righe);
+}
+
+$("form-categoria").addEventListener("submit", (evento) => {
+  evento.preventDefault();
+  const f = evento.target.elements;
+  salvaAnagrafica("categorie", { nome: f.nome.value, ordine: f.ordine.value === "" ? null : Number(f.ordine.value) },
+    `Categoria ${f.nome.value}`);
+});
+
+// --- pannello
+
+for (const tipo of Object.keys(FORM)) {
+  $(FORM[tipo]).querySelector(".annulla-form").addEventListener("click", () => chiudiForm(tipo));
+}
+
+for (const scheda of document.querySelectorAll("#pannello-menu [role=tab]")) {
+  scheda.addEventListener("click", () => {
+    for (const altra of document.querySelectorAll("#pannello-menu [role=tab]")) {
+      const attiva = altra === scheda;
+      altra.setAttribute("aria-selected", String(attiva));
+      $(altra.getAttribute("aria-controls")).hidden = !attiva;
+    }
+    esitoMenu("");
+  });
+}
+
+async function caricaMenu() {
+  menu.dati = await (await api("/api/admin/menu")).json();
+  disegnaArticoli();
+  disegnaIngredienti();
+  disegnaCategorie();
+}
+
+$("btn-menu").addEventListener("click", async () => {
+  esitoMenu("");
+  try {
+    await caricaMenu();
+    $("pannello-menu").showModal();
+  } catch (e) {
+    aggiungiMessaggio("sistema", e.message);
+  }
+});
+
+$("btn-chiudi-menu").addEventListener("click", () => $("pannello-menu").close());
 
 // ------------------------------------------------------------------ avvio
 

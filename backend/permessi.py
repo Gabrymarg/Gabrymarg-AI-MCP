@@ -40,7 +40,8 @@ PERMESSI: dict[str, set[str]] = {
     "stato_ordine": {"ospite", "cliente", "sala", "cucina", "admin"},
     "ordini_da_preparare": {"sala", "cucina", "admin"},
     "aggiorna_stato_ordine": {"cucina", "sala", "admin"},
-    # magazzino e menu: solo amministratore
+    # magazzino e menu: la cucina consulta le giacenze, solo l'amministratore modifica
+    "giacenze_ingredienti": {"cucina", "admin"},
     "aggiorna_scorta": {"admin"},
     "imposta_disponibilita_piatto": {"admin"},
 }

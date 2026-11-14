@@ -247,6 +247,37 @@ def _trova_ingrediente(conn: sqlite3.Connection, nome: str) -> sqlite3.Row:
                         {"ingredienti_simili": difflib.get_close_matches(nome, [i["nome"] for i in ingredienti], n=3)})
 
 
+def giacenze_ingredienti(
+    conn: sqlite3.Connection, testo: str | None = None, solo_sotto_scorta: bool = False
+) -> dict[str, Any]:
+    """Giacenze di magazzino, con l'indicazione degli ingredienti sotto la scorta minima."""
+    condizioni, parametri = [], []
+    if testo:
+        condizioni.append("nome LIKE ?")
+        parametri.append(f"%{testo.strip()}%")
+    if solo_sotto_scorta:
+        condizioni.append("quantita_disponibile < scorta_minima")
+    righe = conn.execute(
+        "SELECT * FROM INGREDIENTI" + (f" WHERE {' AND '.join(condizioni)}" if condizioni else "") + " ORDER BY nome",
+        parametri,
+    ).fetchall()
+    ingredienti = [
+        {
+            "ingrediente": r["nome"],
+            "unita_misura": r["unita_misura"],
+            "quantita_disponibile": r["quantita_disponibile"],
+            "scorta_minima": r["scorta_minima"],
+            "sotto_scorta_minima": r["quantita_disponibile"] < r["scorta_minima"],
+        }
+        for r in righe
+    ]
+    return {
+        "numero_ingredienti": len(ingredienti),
+        "sotto_scorta": sum(i["sotto_scorta_minima"] for i in ingredienti),
+        "ingredienti": ingredienti,
+    }
+
+
 def aggiorna_scorta(
     conn: sqlite3.Connection, ingrediente: str, quantita: float, modalita: str = "aggiungi"
 ) -> dict[str, Any]:

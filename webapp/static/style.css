@@ -376,6 +376,76 @@ dialog::backdrop { background: rgb(20 30 25 / 0.45); }
 }
 .nuovo-utente h3 { grid-column: 1 / -1; margin: 0; font-size: 1rem; }
 
+.tabella-chat { border-collapse: collapse; margin: 0.4rem 0; font-size: 0.92rem; white-space: normal; }
+.tabella-chat th, .tabella-chat td { border-bottom: 1px solid var(--salvia); padding: 0.3rem 0.7rem 0.3rem 0; text-align: left; }
+.tabella-chat th { font-weight: 600; }
+
+/* ------------------------------------------------------------ menu e magazzino */
+
+dialog.pannello-largo { width: min(72rem, 96vw); max-height: 92vh; }
+
+/* Schede come segnalibri di un ricettario: quella attiva si unisce al contenuto. */
+.schede { display: flex; gap: 0.25rem; margin-top: 1rem; border-bottom: 2px solid var(--bottiglia); }
+.schede [role="tab"] {
+  border: 1px solid var(--salvia);
+  border-bottom: none;
+  border-radius: var(--raggio) var(--raggio) 0 0;
+  background: var(--carta);
+  color: var(--grafite);
+  padding: 0.45rem 1.1rem;
+  font-weight: 600;
+}
+.schede [role="tab"][aria-selected="true"] { background: var(--bottiglia); border-color: var(--bottiglia); color: var(--bianco); }
+
+.barra { display: flex; gap: 0.75rem; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.barra input[type="search"] { flex: 1 1 14rem; max-width: 22rem; }
+.spunta-filtro { display: flex; gap: 0.4rem; align-items: center; font-size: 0.92rem; }
+
+.scorrimento { max-height: 40vh; overflow: auto; margin-top: 0.75rem; border: 1px solid var(--salvia); border-radius: var(--raggio); }
+.tabella-dati { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.tabella-dati th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--carta); text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--salvia);
+}
+.tabella-dati td { padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--salvia); vertical-align: middle; }
+.tabella-dati .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tabella-dati .disattivo td { color: var(--grafite); }
+.tabella-dati .disattivo td:first-child { text-decoration: line-through; }
+.tabella-dati .allergeni-cella { color: var(--grafite); font-size: 0.85rem; }
+.tabella-dati .sotto-scorta td:first-child { border-left: 4px solid var(--vino); }
+.segnale { display: block; color: var(--vino); font-size: 0.78rem; font-weight: 600; }
+.azioni-riga { white-space: nowrap; text-align: right; }
+.azioni-riga button { padding: 0.25rem 0.6rem; font-size: 0.85rem; margin-left: 0.3rem; }
+
+.scheda-modifica {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--carta);
+  border: 1px solid var(--salvia);
+  border-left: 4px solid var(--oro);
+  border-radius: var(--raggio);
+}
+.scheda-modifica h3 { margin: 0 0 0.75rem; font-family: var(--serif); font-size: 1.1rem; }
+.scheda-modifica label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.88rem; font-weight: 600; }
+.scheda-modifica .campi { display: grid; grid-template-columns: 2fr 1.4fr 0.8fr; gap: 0.6rem; }
+.scheda-modifica .campi .largo { grid-column: 1 / -1; }
+.scheda-modifica.in-linea { display: grid; grid-template-columns: 2fr repeat(3, 1fr); gap: 0.6rem; align-items: end; }
+.scheda-modifica.in-linea h3, .scheda-modifica.in-linea .pulsanti { grid-column: 1 / -1; }
+#form-categoria.in-linea { grid-template-columns: 2fr 1fr; }
+.scheda-modifica fieldset { margin: 0.9rem 0 0; border: 1px solid var(--salvia); border-radius: var(--raggio); padding: 0.6rem 0.8rem; }
+.scheda-modifica legend { font-weight: 600; font-size: 0.9rem; padding: 0 0.3rem; }
+.spunte { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin-top: 0.75rem; }
+.spunte label { flex-direction: row; align-items: center; gap: 0.35rem; font-weight: 400; }
+.spunte.allergeni { margin-top: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); }
+.ricetta { list-style: none; margin: 0 0 0.6rem; padding: 0; display: grid; gap: 0.4rem; }
+.ricetta li { display: grid; grid-template-columns: 1fr 7rem auto; gap: 0.5rem; }
+.scheda-modifica .pulsanti { display: flex; gap: 0.5rem; margin-top: 0.9rem; }
+
+@media (max-width: 700px) {
+  .scheda-modifica .campi, .scheda-modifica.in-linea, #form-categoria.in-linea { grid-template-columns: 1fr; }
+  .ricetta li { grid-template-columns: 1fr 5rem auto; }
+}
+
 /* ------------------------------------------------------------ schermi piccoli */
 
 @media (max-width: 900px) {

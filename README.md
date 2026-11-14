@@ -19,7 +19,7 @@ Ogni utente opera con un **ruolo** (cliente, sala, cucina, amministratore) e il 
              conferme, admin        conferme, log JSONL
                                          │  JSON-RPC su HTTP + token dell'utente
                                          ▼
-                                    server MCP (17 tool, permessi per ruolo) ──► back-end ──► SQLite
+                                    server MCP (18 tool, permessi per ruolo) ──► back-end ──► SQLite
 
  terminale ──► CLI ──► harness ══ stdio ══► server MCP   (modalità "ospite", senza login)
 ```
@@ -63,8 +63,8 @@ Poi aprire **http://127.0.0.1:8000**. La web app avvia automaticamente anche il 
 |---|---|---|
 | `giulia`, `luca` | Cliente | Menu e allergeni, prenotare, gestire **solo le proprie** prenotazioni e ordini |
 | `sala` | Personale di sala | Tutte le prenotazioni, quadro della serata, stato degli ordini |
-| `cucina` | Cucina | Ordini da preparare e aggiornamento del loro stato, menu e allergeni |
-| `admin` | Amministratore | Tutto, più magazzino, piatti nel menu e gestione di utenti e ruoli dal pannello web |
+| `cucina` | Cucina | Ordini da preparare e aggiornamento del loro stato, menu e allergeni, giacenze di magazzino |
+| `admin` | Amministratore | Tutto, più magazzino e piatti nel menu; dai pannelli web gestisce utenti e ruoli, articoli (ricette e allergeni), ingredienti e categorie |
 
 Le password degli utenti dimostrativi sono in `backend/seed.py` (`UTENTI_DEMO`): sono credenziali di prova, valide solo per il database locale.
 
@@ -101,7 +101,7 @@ Il server MCP si può avviare anche da solo: `python -m mcp_server.server` (stdi
 ## Test
 
 ```bash
-python -m pytest                                                               # 128 test, non serve un modello
+python -m pytest                                                               # 138 test, non serve un modello
 python scenarios/run_scenarios.py --modello qwen2.5:3b                         # 16 scenari (ospite)
 python scenarios/run_scenarios.py --file scenari_ruoli.yaml --provider groq --modello openai/gpt-oss-20b   # 8 scenari per ruolo
 ```

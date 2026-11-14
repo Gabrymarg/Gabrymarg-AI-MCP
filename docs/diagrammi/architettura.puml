@@ -14,7 +14,7 @@ node "Browser" {
 node "Web app (FastAPI, porta 8000)" {
   [Autenticazione\nlogin, cookie HttpOnly,\nblocco tentativi] as AUTH
   [Gestore sessioni\nuna per utente] as SES
-  [API amministrazione\nutenti e ruoli] as ADM
+  [API amministrazione\nutenti e ruoli,\nmenu e magazzino] as ADM
   package "Harness agentico" {
     [Agent\nciclo, validazione,\nconferma, coerenza,\ngestione contesto] as AG
     [LLMProvider] as PROV
@@ -25,11 +25,11 @@ node "Web app (FastAPI, porta 8000)" {
 
 node "Server MCP (porta 8765)" {
   [Verifica token\n+ ruolo dal DB] as VER
-  [17 tool\npermessi per ruolo] as TOOLS
+  [18 tool\npermessi per ruolo] as TOOLS
 }
 
 node "Back-end" {
-  [Servizi di dominio\nprenotazioni, menu,\nordini, utenti] as SRV
+  [Servizi di dominio\nprenotazioni, menu,\nordini, utenti,\nanagrafiche] as SRV
   database "SQLite" as DB
 }
 
@@ -53,7 +53,8 @@ VER --> TOOLS
 TOOLS --> SRV
 SRV --> DB
 AUTH --> DB : verifica password\n(hash scrypt)
-ADM --> DB
+ADM --> SRV : anagrafiche\n(categorie, ingredienti,\narticoli)
+ADM --> DB : utenti
 
 note bottom of TOOLS
   Difesa in profondità:

@@ -19,6 +19,7 @@ package "mcp_server" <<Rectangle>> {
     + prenotazioni_del_giorno(data) : QuadroSala
     + stato_ordine(id_ordine, telefono) : Ordine
     + ordini_da_preparare(data) : ElencoOrdini
+    + giacenze_ingredienti(testo, solo_sotto_scorta) : Giacenze
     .. tool di scrittura (readOnlyHint = false) ..
     + crea_prenotazione(...) : Prenotazione
     + modifica_prenotazione(...) : Prenotazione
@@ -39,7 +40,7 @@ package "mcp_server" <<Rectangle>> {
     Disponibilita, OrariDisponibili, Prenotazione
     ElencoPrenotazioni, QuadroSala, RigaOrdineIn
     Ordine, RigaOrdine, ElencoOrdini, OrariApertura
-    Profilo, EsitoScorta, DisponibilitaPiatto
+    Profilo, Giacenze, EsitoScorta, DisponibilitaPiatto
   }
 }
 
@@ -56,6 +57,12 @@ package "backend" <<Rectangle>> {
     + dettaglio_piatto(conn, id_articolo, nome)
     + trova_piatto(conn, nome) : int
     + porzioni_disponibili(conn, id) : int
+    + giacenze_ingredienti(conn, testo, solo_sotto_scorta)
+  }
+  class anagrafiche <<module>> {
+    + salva_categoria / elimina_categoria
+    + salva_ingrediente / elimina_ingrediente
+    + salva_articolo(conn, ..., allergeni, ricetta)
   }
   class ordini <<module>> {
     + crea_ordine_asporto(conn, ...)

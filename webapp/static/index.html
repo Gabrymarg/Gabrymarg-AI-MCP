@@ -49,6 +49,7 @@
     </label>
     <nav class="azioni">
       <button id="btn-nuova" type="button">Nuova conversazione</button>
+      <button id="btn-menu" type="button" hidden>Menu e magazzino</button>
       <button id="btn-utenti" type="button" hidden>Gestisci utenti</button>
       <button id="btn-esci" type="button">Esci</button>
     </nav>
@@ -101,6 +102,105 @@
     <input name="password" type="password" placeholder="Password (min. 10 caratteri)" required minlength="10" aria-label="Password">
     <button type="submit" class="primario">Aggiungi utente</button>
   </form>
+</dialog>
+
+<!-- ============================================================ menu e magazzino (solo admin) -->
+<dialog id="pannello-menu" class="pannello-largo" aria-labelledby="titolo-menu">
+  <header class="pannello-testata">
+    <h2 id="titolo-menu">Menu e magazzino</h2>
+    <button id="btn-chiudi-menu" type="button">Chiudi</button>
+  </header>
+  <div class="schede" role="tablist" aria-label="Anagrafiche">
+    <button type="button" role="tab" id="tab-articoli" aria-controls="sez-articoli" aria-selected="true">Articoli</button>
+    <button type="button" role="tab" id="tab-ingredienti" aria-controls="sez-ingredienti" aria-selected="false">Ingredienti</button>
+    <button type="button" role="tab" id="tab-categorie" aria-controls="sez-categorie" aria-selected="false">Categorie</button>
+  </div>
+  <p id="esito-menu" class="esito" role="status"></p>
+
+  <!-- articoli -->
+  <section id="sez-articoli" role="tabpanel" aria-labelledby="tab-articoli">
+    <div class="barra">
+      <input id="filtro-articoli" type="search" placeholder="Cerca un piatto" aria-label="Cerca un piatto">
+      <button id="btn-nuovo-articolo" type="button" class="primario">Nuovo articolo</button>
+    </div>
+    <div class="scorrimento">
+      <table class="tabella-dati">
+        <thead><tr><th scope="col">Piatto</th><th scope="col">Categoria</th><th scope="col" class="num">Prezzo</th><th scope="col">Allergeni</th><th scope="col">Stato</th><th scope="col"><span class="nascosto">Azioni</span></th></tr></thead>
+        <tbody id="righe-articoli"></tbody>
+      </table>
+    </div>
+    <form id="form-articolo" class="scheda-modifica" hidden>
+      <h3 id="titolo-form-articolo">Nuovo articolo</h3>
+      <div class="campi">
+        <label>Nome <input name="nome" required maxlength="80"></label>
+        <label>Categoria <select name="id_categoria" required></select></label>
+        <label>Prezzo (€) <input name="prezzo" type="number" min="0" max="1000" step="0.5" required></label>
+        <label class="largo">Descrizione <input name="descrizione" required maxlength="300"></label>
+      </div>
+      <div class="spunte">
+        <label><input type="checkbox" name="vegetariano"> Vegetariano</label>
+        <label><input type="checkbox" name="asporto"> Disponibile da asporto</label>
+        <label><input type="checkbox" name="attivo"> Nel menu</label>
+      </div>
+      <fieldset>
+        <legend>Allergeni (Reg. UE 1169/2011)</legend>
+        <div id="spunte-allergeni" class="spunte allergeni"></div>
+      </fieldset>
+      <fieldset>
+        <legend>Ricetta: quantità per porzione</legend>
+        <ol id="righe-ricetta" class="ricetta"></ol>
+        <button id="btn-aggiungi-riga" type="button">Aggiungi ingrediente</button>
+      </fieldset>
+      <div class="pulsanti">
+        <button type="submit" class="primario">Salva articolo</button>
+        <button type="button" class="annulla-form">Annulla</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- ingredienti -->
+  <section id="sez-ingredienti" role="tabpanel" aria-labelledby="tab-ingredienti" hidden>
+    <div class="barra">
+      <input id="filtro-ingredienti" type="search" placeholder="Cerca un ingrediente" aria-label="Cerca un ingrediente">
+      <label class="spunta-filtro"><input id="solo-sotto-scorta" type="checkbox"> Solo sotto scorta</label>
+    </div>
+    <div class="scorrimento">
+      <table class="tabella-dati">
+        <thead><tr><th scope="col">Ingrediente</th><th scope="col" class="num">Disponibile</th><th scope="col" class="num">Scorta minima</th><th scope="col" class="num">Ricette</th><th scope="col"><span class="nascosto">Azioni</span></th></tr></thead>
+        <tbody id="righe-ingredienti"></tbody>
+      </table>
+    </div>
+    <form id="form-ingrediente" class="scheda-modifica in-linea">
+      <h3 id="titolo-form-ingrediente">Nuovo ingrediente</h3>
+      <label>Nome <input name="nome" required maxlength="60"></label>
+      <label>Unità <select name="unita_misura"><option value="g">g</option><option value="ml">ml</option><option value="pz">pz</option></select></label>
+      <label>Disponibile <input name="quantita_disponibile" type="number" min="0" step="any" required></label>
+      <label>Scorta minima <input name="scorta_minima" type="number" min="0" step="any" value="0" required></label>
+      <div class="pulsanti">
+        <button type="submit" class="primario">Salva ingrediente</button>
+        <button type="button" class="annulla-form">Annulla</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- categorie -->
+  <section id="sez-categorie" role="tabpanel" aria-labelledby="tab-categorie" hidden>
+    <div class="scorrimento">
+      <table class="tabella-dati">
+        <thead><tr><th scope="col" class="num">Ordine</th><th scope="col">Categoria</th><th scope="col" class="num">Articoli</th><th scope="col"><span class="nascosto">Azioni</span></th></tr></thead>
+        <tbody id="righe-categorie"></tbody>
+      </table>
+    </div>
+    <form id="form-categoria" class="scheda-modifica in-linea">
+      <h3 id="titolo-form-categoria">Nuova categoria</h3>
+      <label>Nome <input name="nome" required maxlength="40"></label>
+      <label>Ordine nel menu <input name="ordine" type="number" min="0" max="999" placeholder="in fondo"></label>
+      <div class="pulsanti">
+        <button type="submit" class="primario">Salva categoria</button>
+        <button type="button" class="annulla-form">Annulla</button>
+      </div>
+    </form>
+  </section>
 </dialog>
 
 </body>

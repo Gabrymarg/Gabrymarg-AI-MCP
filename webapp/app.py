@@ -4,10 +4,12 @@ Responsabilità:
   - autenticazione degli utenti e rilascio del token (cookie HttpOnly);
   - una sessione agentica per utente, collegata al server MCP via HTTP con il token dell'utente;
   - chat in streaming (Server-Sent Events) con gli eventi del ciclo agentico e le richieste di conferma;
-  - API di amministrazione degli utenti (solo ruolo admin).
+  - API di amministrazione (solo ruolo admin): utenti e anagrafiche del menu (categorie, ingredienti, articoli).
 
 Il server MCP è un processo separato (python -m mcp_server.server --http) avviato all'avvio della web app.
 I permessi sui dati sono applicati dal server MCP: la web app NON accede direttamente a prenotazioni e ordini.
+Le anagrafiche sono configurazione, non operazioni da delegare all'agente: si gestiscono con maschere
+tradizionali, tramite i servizi del back-end (backend/anagrafiche.py), solo dall'amministratore.
 """
 
 from __future__ import annotations
@@ -28,7 +30,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from backend import permessi, token_accesso, utenti
+from backend import anagrafiche, permessi, token_accesso, utenti
 from backend.db import connessione
 from backend.errori import ErroreDominio
 from backend.permessi import Utente
@@ -305,6 +307,100 @@ async def modifica(id_utente: int, modifiche: ModificaUtente, request: Request, 
     if modifiche.attivo is False or modifiche.ruolo:
         await request.app.state.sessioni.chiudi(id_utente)
     return aggiornato
+
+
+# ============================================================================ anagrafiche del menu
+
+
+class Categoria(BaseModel):
+    nome: str = Field(max_length=40)
+    ordine: int | None = Field(default=None, ge=0, le=999)
+
+
+class Ingrediente(BaseModel):
+    nome: str = Field(max_length=60)
+    unita_misura: str
+    quantita_disponibile: float
+    scorta_minima: float = 0
+
+
+class RigaRicetta(BaseModel):
+    id_ingrediente: int
+    quantita: float
+
+
+class Articolo(BaseModel):
+    nome: str = Field(max_length=80)
+    descrizione: str = Field(max_length=300)
+    prezzo: float
+    id_categoria: int
+    vegetariano: bool = False
+    asporto: bool = True
+    attivo: bool = True
+    allergeni: list[str] = Field(default_factory=list, max_length=14)
+    ricetta: list[RigaRicetta] = Field(default_factory=list, max_length=30)
+
+
+def _esegui(funzione, *argomenti, **opzioni):
+    """Esegue un servizio delle anagrafiche in una transazione; le regole violate diventano errori 400."""
+    try:
+        with connessione() as conn:
+            return funzione(conn, *argomenti, **opzioni)
+    except ErroreDominio as e:
+        raise _errore_dominio(e) from None
+
+
+@app.get("/api/admin/menu")
+async def anagrafiche_menu(admin: Utente = Depends(solo_admin)):
+    with connessione() as conn:
+        return {
+            "categorie": anagrafiche.elenco_categorie(conn),
+            "ingredienti": anagrafiche.elenco_ingredienti(conn),
+            "articoli": anagrafiche.elenco_articoli(conn),
+            "allergeni": anagrafiche.elenco_allergeni(conn),
+        }
+
+
+@app.post("/api/admin/categorie", status_code=201)
+async def crea_categoria(dati: Categoria, admin: Utente = Depends(solo_admin)):
+    return _esegui(anagrafiche.salva_categoria, dati.nome, dati.ordine)
+
+
+@app.put("/api/admin/categorie/{id_categoria}")
+async def modifica_categoria(id_categoria: int, dati: Categoria, admin: Utente = Depends(solo_admin)):
+    return _esegui(anagrafiche.salva_categoria, dati.nome, dati.ordine, id_categoria)
+
+
+@app.delete("/api/admin/categorie/{id_categoria}")
+async def elimina_categoria(id_categoria: int, admin: Utente = Depends(solo_admin)):
+    _esegui(anagrafiche.elimina_categoria, id_categoria)
+    return {"ok": True}
+
+
+@app.post("/api/admin/ingredienti", status_code=201)
+async def crea_ingrediente(dati: Ingrediente, admin: Utente = Depends(solo_admin)):
+    return _esegui(anagrafiche.salva_ingrediente, **dati.model_dump())
+
+
+@app.put("/api/admin/ingredienti/{id_ingrediente}")
+async def modifica_ingrediente(id_ingrediente: int, dati: Ingrediente, admin: Utente = Depends(solo_admin)):
+    return _esegui(anagrafiche.salva_ingrediente, **dati.model_dump(), id_ingrediente=id_ingrediente)
+
+
+@app.delete("/api/admin/ingredienti/{id_ingrediente}")
+async def elimina_ingrediente(id_ingrediente: int, admin: Utente = Depends(solo_admin)):
+    _esegui(anagrafiche.elimina_ingrediente, id_ingrediente)
+    return {"ok": True}
+
+
+@app.post("/api/admin/articoli", status_code=201)
+async def crea_articolo(dati: Articolo, admin: Utente = Depends(solo_admin)):
+    return _esegui(anagrafiche.salva_articolo, **dati.model_dump())
+
+
+@app.put("/api/admin/articoli/{id_articolo}")
+async def modifica_articolo(id_articolo: int, dati: Articolo, admin: Utente = Depends(solo_admin)):
+    return _esegui(anagrafiche.salva_articolo, **dati.model_dump(), id_articolo=id_articolo)
 
 
 # ============================================================================ pagine statiche

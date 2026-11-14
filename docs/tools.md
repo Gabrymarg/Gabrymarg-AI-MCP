@@ -20,6 +20,7 @@ Gli esempi sono stati eseguiti realmente via HTTP, come amministratore, su un da
 | `stato_ordine` | lettura | ospite, cliente, sala, cucina, admin | id_ordine |
 | `ordini_da_preparare` | lettura | sala, cucina, admin | - |
 | `aggiorna_stato_ordine` | scrittura | sala, cucina, admin | id_ordine, nuovo_stato |
+| `giacenze_ingredienti` | lettura | cucina, admin | - |
 | `aggiorna_scorta` | scrittura | admin | ingrediente, quantita |
 | `imposta_disponibilita_piatto` | scrittura | admin | nome, disponibile |
 
@@ -111,6 +112,7 @@ Il ruolo deriva dall'accesso effettuato, non da quanto dichiarato nella conversa
     "crea_ordine_asporto",
     "crea_prenotazione",
     "dettaglio_piatto",
+    "giacenze_ingredienti",
     "imposta_disponibilita_piatto",
     "mio_profilo",
     "modifica_prenotazione",
@@ -2639,6 +2641,148 @@ Sono ammesse solo le transizioni coerenti. Riservato a cucina, sala e amministra
       "quantita": 2,
       "prezzo_unitario": 7.0,
       "note": null
+    }
+  ]
+}
+```
+
+## `giacenze_ingredienti`
+
+Giacenze di magazzino degli ingredienti, con quantità, unità di misura e scorta minima.
+Indica quali ingredienti sono sotto scorta. Riservato a cucina e amministratore.
+
+**Effetti sui dati:** Sola lettura (`readOnlyHint: true`): nessun effetto sui dati, non richiede conferma.
+
+**Ruoli autorizzati:** cucina, admin.
+
+**Schema dei parametri di ingresso:**
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "testo": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Parte del nome dell'ingrediente (es. 'tartufo').",
+      "title": "Testo"
+    },
+    "solo_sotto_scorta": {
+      "default": false,
+      "description": "True per elencare solo gli ingredienti sotto la scorta minima (da riordinare).",
+      "title": "Solo Sotto Scorta",
+      "type": "boolean"
+    }
+  },
+  "title": "giacenze_ingredientiArguments"
+}
+```
+
+**Schema di uscita:**
+
+```json
+{
+  "$defs": {
+    "Giacenza": {
+      "properties": {
+        "ingrediente": {
+          "title": "Ingrediente",
+          "type": "string"
+        },
+        "unita_misura": {
+          "title": "Unita Misura",
+          "type": "string"
+        },
+        "quantita_disponibile": {
+          "title": "Quantita Disponibile",
+          "type": "number"
+        },
+        "scorta_minima": {
+          "title": "Scorta Minima",
+          "type": "number"
+        },
+        "sotto_scorta_minima": {
+          "title": "Sotto Scorta Minima",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "ingrediente",
+        "unita_misura",
+        "quantita_disponibile",
+        "scorta_minima",
+        "sotto_scorta_minima"
+      ],
+      "title": "Giacenza",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "numero_ingredienti": {
+      "title": "Numero Ingredienti",
+      "type": "integer"
+    },
+    "sotto_scorta": {
+      "description": "Quanti ingredienti sono sotto la scorta minima.",
+      "title": "Sotto Scorta",
+      "type": "integer"
+    },
+    "ingredienti": {
+      "items": {
+        "$ref": "#/$defs/Giacenza"
+      },
+      "title": "Ingredienti",
+      "type": "array"
+    }
+  },
+  "required": [
+    "numero_ingredienti",
+    "sotto_scorta",
+    "ingredienti"
+  ],
+  "title": "Giacenze",
+  "type": "object"
+}
+```
+
+**Esempio di invocazione:**
+
+```json
+{
+  "name": "giacenze_ingredienti",
+  "arguments": {
+    "solo_sotto_scorta": true
+  }
+}
+```
+
+**Risultato:**
+
+```json
+{
+  "numero_ingredienti": 2,
+  "sotto_scorta": 2,
+  "ingredienti": [
+    {
+      "ingrediente": "branzino",
+      "unita_misura": "pz",
+      "quantita_disponibile": 0.0,
+      "scorta_minima": 6.0,
+      "sotto_scorta_minima": true
+    },
+    {
+      "ingrediente": "tartufo nero",
+      "unita_misura": "g",
+      "quantita_disponibile": 25.0,
+      "scorta_minima": 50.0,
+      "sotto_scorta_minima": true
     }
   ]
 }

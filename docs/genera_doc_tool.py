@@ -47,6 +47,7 @@ ESEMPI = {
     "stato_ordine": {"id_ordine": 1},
     "ordini_da_preparare": {},
     "aggiorna_stato_ordine": {"id_ordine": 1, "nuovo_stato": "pronto"},
+    "giacenze_ingredienti": {"solo_sotto_scorta": True},
     "aggiorna_scorta": {"ingrediente": "tartufo nero", "quantita": 200, "modalita": "aggiungi"},
     "imposta_disponibilita_piatto": {"nome": "branzino al forno", "disponibile": False},
 }

@@ -56,6 +56,7 @@ from mcp_server.schemas import (  # noqa: E402
     ElencoOrdini,
     ElencoPrenotazioni,
     EsitoScorta,
+    Giacenze,
     OrariApertura,
     OrariDisponibili,
     Ordine,
@@ -433,7 +434,21 @@ def aggiorna_stato_ordine(
         return Ordine(**ordini.aggiorna_stato_ordine(conn, id_ordine, nuovo_stato))
 
 
-# ============================================================================ amministrazione
+# ============================================================================ magazzino e amministrazione
+
+
+@mcp.tool(annotations=LETTURA)
+@tool_protetto
+def giacenze_ingredienti(
+    testo: Annotated[str | None, Field(description="Parte del nome dell'ingrediente (es. 'tartufo').")] = None,
+    solo_sotto_scorta: Annotated[
+        bool, Field(description="True per elencare solo gli ingredienti sotto la scorta minima (da riordinare).")
+    ] = False,
+) -> Giacenze:
+    """Giacenze di magazzino degli ingredienti, con quantità, unità di misura e scorta minima.
+    Indica quali ingredienti sono sotto scorta. Riservato a cucina e amministratore."""
+    with connessione() as conn:
+        return Giacenze(**menu.giacenze_ingredienti(conn, testo, solo_sotto_scorta))
 
 
 @mcp.tool(annotations=SCRITTURA)
