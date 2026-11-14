@@ -49,6 +49,7 @@
     </label>
     <nav class="azioni">
       <button id="btn-nuova" type="button">Nuova conversazione</button>
+      <button id="btn-storico" type="button">Storico</button>
       <button id="btn-cruscotto" type="button" hidden>Cruscotto</button>
       <button id="btn-menu" type="button" hidden>Menu e magazzino</button>
       <button id="btn-utenti" type="button" hidden>Gestisci utenti</button>
@@ -103,6 +104,40 @@
     <input name="password" type="password" placeholder="Password (min. 10 caratteri)" required minlength="10" aria-label="Password">
     <button type="submit" class="primario">Aggiungi utente</button>
   </form>
+</dialog>
+
+<!-- ============================================================ storico delle conversazioni -->
+<dialog id="pannello-storico" class="pannello-largo" aria-labelledby="titolo-storico">
+  <header class="pannello-testata">
+    <div>
+      <h2 id="titolo-storico">Storico delle conversazioni</h2>
+      <p class="sottotitolo-pannello">Si conservano le tue richieste e le risposte dell'assistente.</p>
+    </div>
+    <button id="btn-chiudi-storico" type="button">Chiudi</button>
+  </header>
+  <p id="esito-storico" class="esito" role="status"></p>
+
+  <section id="elenco-storico">
+    <div class="barra">
+      <input id="filtro-storico" type="search" placeholder="Cerca nei titoli" aria-label="Cerca nei titoli">
+      <label class="spunta-filtro" id="etichetta-tutte" hidden><input id="storico-tutte" type="checkbox"> Mostra le conversazioni di tutti gli utenti</label>
+    </div>
+    <div class="scorrimento">
+      <table class="tabella-dati">
+        <thead><tr><th scope="col">Conversazione</th><th scope="col" class="colonna-utente" hidden>Utente</th><th scope="col">Ultima attività</th><th scope="col" class="num">Messaggi</th><th scope="col"><span class="nascosto">Azioni</span></th></tr></thead>
+        <tbody id="righe-storico"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="lettura-storico" hidden>
+    <div class="barra">
+      <button id="btn-torna-storico" type="button">Torna all'elenco</button>
+      <button id="btn-riprendi-letta" type="button" class="primario" hidden>Riprendi questa conversazione</button>
+    </div>
+    <h3 id="titolo-lettura" class="titolo-sezione"></h3>
+    <ol id="messaggi-lettura" class="messaggi lettura"></ol>
+  </section>
 </dialog>
 
 <!-- ============================================================ cruscotto (solo admin) -->

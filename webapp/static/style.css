@@ -391,6 +391,12 @@ dialog::backdrop { background: rgb(20 30 25 / 0.45); }
 .tabella-chat th, .tabella-chat td { border-bottom: 1px solid var(--salvia); padding: 0.3rem 0.7rem 0.3rem 0; text-align: left; }
 .tabella-chat th { font-weight: 600; }
 
+/* ------------------------------------------------------------ storico */
+
+.messaggi.lettura { max-height: 55vh; overflow: auto; padding: 0.5rem 0.25rem; }
+.messaggio .orario { display: block; margin-top: 0.25rem; font-size: 0.75rem; opacity: 0.7; }
+.tabella-dati td.vuoto { color: var(--grafite); text-align: center; padding: 1rem; }
+
 /* ------------------------------------------------------------ cruscotto */
 
 .sottotitolo-pannello { margin: 0.2rem 0 0; color: var(--grafite); font-size: 0.88rem; }

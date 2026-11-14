@@ -18,6 +18,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
+from backend import storico
+from backend.db import connessione
 from harness.agent import Agent
 from harness.config import Config
 from harness.confirm import riepilogo
@@ -67,6 +69,7 @@ class Sessione:
     _loop: asyncio.AbstractEventLoop | None = None
     _thread_loop: int | None = None
     occupata: bool = False
+    id_conversazione: int | None = None  # conversazione dello storico in corso
 
     # ------------------------------------------------------------------ ciclo di vita
 
@@ -104,14 +107,22 @@ class Sessione:
                     self._uscita = uscita
                     try:
                         if tipo == "turno":
+                            self._salva("utente", valore)
                             esito = await agente.esegui_turno(valore)
+                            self._salva("assistente", esito.risposta)
                             await uscita.put({
                                 "tipo": "risposta", "testo": esito.risposta, "motivo_arresto": esito.motivo_arresto,
                                 "token": esito.uso.totale, "durata_ms": esito.durata_ms,
                                 "token_sessione": agente.uso_sessione.totale,
+                                "id_conversazione": self.id_conversazione,
                             })
                         elif tipo == "nuova":
                             agente.nuova_conversazione()
+                            self.id_conversazione = None
+                        elif tipo == "riprendi":
+                            id_conversazione, storia = valore
+                            agente.ripristina(storia)
+                            self.id_conversazione = id_conversazione
                     except Exception as e:  # un turno fallito non deve chiudere la sessione
                         await uscita.put({"tipo": "errore", "messaggio": f"Errore interno: {type(e).__name__}"})
                     finally:
@@ -122,6 +133,18 @@ class Sessione:
             self.pronta.set()
         finally:
             log.chiudi()
+
+    # ------------------------------------------------------------------ storico
+
+    def _salva(self, ruolo: str, testo: str) -> None:
+        """Registra un messaggio nello storico; il primo messaggio dell'utente apre la conversazione."""
+        try:
+            with connessione() as conn:
+                if self.id_conversazione is None:
+                    self.id_conversazione = storico.nuova(conn, self.id_utente, testo, self.modello)
+                storico.aggiungi(conn, self.id_conversazione, ruolo, testo)
+        except Exception:  # lo storico è un servizio accessorio: un suo guasto non deve fermare la chat
+            pass
 
     # ------------------------------------------------------------------ eventi e conferme
 

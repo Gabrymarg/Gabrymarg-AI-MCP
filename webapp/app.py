@@ -30,7 +30,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from backend import anagrafiche, permessi, token_accesso, utenti
+from backend import anagrafiche, permessi, storico, token_accesso, utenti
 from backend.db import connessione
 from backend.errori import ErroreDominio
 from backend.permessi import Utente
@@ -92,6 +92,8 @@ async def ciclo_di_vita(app: FastAPI):
                 break
             await asyncio.sleep(0.1)
     app.state.sessioni = GestoreSessioni(URL_MCP)
+    with connessione() as conn:
+        storico.crea_tabelle(conn)  # database creati prima dell'introduzione dello storico
     try:
         yield
     finally:
@@ -254,6 +256,55 @@ async def nuova_conversazione(request: Request, dati: tuple[Utente, str] = Depen
     uscita = await _sessione(request, dati[0]).esegui("nuova")
     while await uscita.get() is not None:
         pass
+    return {"ok": True}
+
+
+# ============================================================================ storico delle conversazioni
+
+
+def _storico(funzione, *argomenti, **opzioni):
+    try:
+        with connessione() as conn:
+            return funzione(conn, *argomenti, **opzioni)
+    except ErroreDominio as e:
+        stato = 404 if e.codice == "CONVERSAZIONE_INESISTENTE" else 403
+        raise HTTPException(stato, e.messaggio) from None
+
+
+@app.get("/api/conversazioni")
+async def elenco_conversazioni(tutte: bool = False, dati: tuple[Utente, str] = Depends(utente_corrente)):
+    return _storico(storico.elenco, dati[0], tutte)
+
+
+@app.get("/api/conversazioni/{id_conversazione}")
+async def leggi_conversazione(id_conversazione: int, dati: tuple[Utente, str] = Depends(utente_corrente)):
+    return _storico(storico.leggi, id_conversazione, dati[0])
+
+
+@app.post("/api/conversazioni/{id_conversazione}/riprendi")
+async def riprendi_conversazione(id_conversazione: int, request: Request,
+                                 dati: tuple[Utente, str] = Depends(utente_corrente)):
+    """Riprende una propria conversazione: l'agente riparte con i messaggi salvati."""
+    conversazione = _storico(storico.leggi, id_conversazione, dati[0], per_riprendere=True)
+    sessione = _sessione(request, dati[0])
+    if sessione.occupata:
+        raise HTTPException(409, "L'assistente sta ancora rispondendo al messaggio precedente.")
+    storia = [(m["ruolo"], m["testo"]) for m in conversazione["messaggi"]]
+    uscita = await sessione.esegui("riprendi", (id_conversazione, storia))
+    while await uscita.get() is not None:
+        pass
+    return conversazione
+
+
+@app.delete("/api/conversazioni/{id_conversazione}")
+async def elimina_conversazione(id_conversazione: int, request: Request,
+                                dati: tuple[Utente, str] = Depends(utente_corrente)):
+    _storico(storico.elimina, id_conversazione, dati[0])
+    sessione = request.app.state.sessioni.get(dati[0].id_utente)
+    if sessione and sessione.id_conversazione == id_conversazione and not sessione.occupata:
+        uscita = await sessione.esegui("nuova")  # la conversazione in corso è stata eliminata: si riparte da zero
+        while await uscita.get() is not None:
+            pass
     return {"ok": True}
 
 

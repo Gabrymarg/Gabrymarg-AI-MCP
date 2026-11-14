@@ -799,6 +799,117 @@ $("btn-menu").addEventListener("click", async () => {
 
 $("btn-chiudi-menu").addEventListener("click", () => $("pannello-menu").close());
 
+// ------------------------------------------------------------------ storico delle conversazioni
+
+const storicoStato = { elenco: [], letta: null };
+
+function esitoStorico(testo, errore = false) {
+  const el = $("esito-storico");
+  el.textContent = testo;
+  el.classList.toggle("errore", errore);
+}
+
+async function riprendiConversazione(id) {
+  try {
+    const c = await (await api(`/api/conversazioni/${id}/riprendi`, { metodo: "POST" })).json();
+    $("pannello-storico").close();
+    $("messaggi").replaceChildren();
+    $("traccia").replaceChildren();
+    for (const m of c.messaggi) aggiungiMessaggio(m.ruolo === "utente" ? "utente" : "assistente", m.testo);
+    aggiungiMessaggio("sistema", `Conversazione ripresa: «${c.titolo}». Puoi continuare a scrivere.`);
+    aggiungiPasso("turno", "Conversazione ripresa", `${c.messaggi.length} messaggi ripristinati`);
+  } catch (e) {
+    esitoStorico(e.message, true);
+  }
+}
+
+async function eliminaConversazione(c) {
+  try {
+    await api(`/api/conversazioni/${c.id_conversazione}`, { metodo: "DELETE" });
+    esitoStorico(`Conversazione «${c.titolo}» eliminata`);
+    await caricaStorico();
+  } catch (e) {
+    esitoStorico(e.message, true);
+  }
+}
+
+async function leggiConversazione(c) {
+  try {
+    const dati = await (await api(`/api/conversazioni/${c.id_conversazione}`)).json();
+    storicoStato.letta = dati;
+    $("titolo-lettura").textContent = dati.propria ? dati.titolo : `${dati.titolo} (utente: ${dati.username})`;
+    $("messaggi-lettura").replaceChildren(...dati.messaggi.map((m) => {
+      const li = crea("li", `messaggio ${m.ruolo === "utente" ? "utente" : "assistente"}`);
+      if (m.ruolo !== "utente") li.append(crea("span", "firma", "Osteria del Borgo"));
+      li.append(m.ruolo === "utente" ? document.createTextNode(m.testo) : testoFormattato(m.testo));
+      li.append(crea("span", "orario", data(m.creato_il)));
+      return li;
+    }));
+    $("btn-riprendi-letta").hidden = !dati.propria;
+    $("elenco-storico").hidden = true;
+    $("lettura-storico").hidden = false;
+  } catch (e) {
+    esitoStorico(e.message, true);
+  }
+}
+
+function disegnaStorico() {
+  const filtro = $("filtro-storico").value.trim().toLowerCase();
+  const tutte = $("storico-tutte").checked;
+  for (const th of document.querySelectorAll("#pannello-storico .colonna-utente")) th.hidden = !tutte;
+  const righe = storicoStato.elenco
+    .filter((c) => !filtro || c.titolo.toLowerCase().includes(filtro))
+    .map((c) => {
+      const tr = crea("tr");
+      const utente = crea("td", "colonna-utente", c.propria ? "tu" : `${c.nome} (${c.username})`);
+      utente.hidden = !tutte;
+      const azioni = crea("td", "azioni-riga");
+      azioni.append(pulsante("Leggi", "", () => leggiConversazione(c)));
+      if (c.propria) {
+        azioni.append(pulsante("Riprendi", "", () => riprendiConversazione(c.id_conversazione)));
+        azioni.append(pulsanteElimina(c.titolo, () => eliminaConversazione(c)));
+      }
+      tr.append(crea("td", "", c.titolo), utente, crea("td", "", data(c.aggiornata_il)),
+        crea("td", "num", String(c.numero_messaggi)), azioni);
+      return tr;
+    });
+  $("righe-storico").replaceChildren(...righe);
+  if (!righe.length) {
+    const tr = crea("tr");
+    const td = crea("td", "vuoto", filtro ? "Nessuna conversazione con questo titolo." : "Non ci sono ancora conversazioni salvate.");
+    td.colSpan = 5;
+    tr.append(td);
+    $("righe-storico").append(tr);
+  }
+}
+
+async function caricaStorico() {
+  const tutte = $("storico-tutte").checked;
+  storicoStato.elenco = await (await api(`/api/conversazioni${tutte ? "?tutte=true" : ""}`)).json();
+  disegnaStorico();
+}
+
+$("btn-storico").addEventListener("click", async () => {
+  esitoStorico("");
+  $("etichetta-tutte").hidden = stato.profilo?.ruolo !== "admin";
+  $("elenco-storico").hidden = false;
+  $("lettura-storico").hidden = true;
+  try {
+    await caricaStorico();
+    $("pannello-storico").showModal();
+  } catch (e) {
+    aggiungiMessaggio("sistema", e.message);
+  }
+});
+$("storico-tutte").addEventListener("change", () => caricaStorico().catch((e) => esitoStorico(e.message, true)));
+$("filtro-storico").addEventListener("input", disegnaStorico);
+$("btn-torna-storico").addEventListener("click", () => {
+  $("lettura-storico").hidden = true;
+  $("elenco-storico").hidden = false;
+});
+$("btn-riprendi-letta").addEventListener("click", () => riprendiConversazione(storicoStato.letta.id_conversazione));
+$("btn-chiudi-storico").addEventListener("click", () => $("pannello-storico").close());
+
 // ------------------------------------------------------------------ cruscotto (admin)
 
 const numero = (n, decimali = 0) => n.toLocaleString("it-IT", { maximumFractionDigits: decimali, useGrouping: "always" });

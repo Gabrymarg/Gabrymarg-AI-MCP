@@ -30,7 +30,7 @@ from jsonschema import Draft202012Validator
 from harness.config import Config
 from harness.confirm import FunzioneConferma, riepilogo
 from harness.guardrail import AVVISO as AVVISO_GUARDRAIL
-from harness.guardrail import afferma_operazione, avviso_riferimenti, riferimenti_inventati
+from harness.guardrail import afferma_operazione, avviso_riferimenti, riferimenti_citati, riferimenti_inventati
 from harness.llm.base import LLMProvider, Messaggio, ToolCall, ToolSpec, Uso
 from harness.logger import LoggerJSONL
 from harness.mcp_client import EsitoTool
@@ -98,6 +98,9 @@ class Agent:
         self.turno = 0
         self.uso_sessione = Uso()
         self.profilo: dict[str, Any] = {"ruolo": "ospite", "nome": None}
+        # Numeri di prenotazione e d'ordine già consegnati al cliente in risposte verificate: restano validi
+        # anche quando i risultati dei tool che li contenevano non sono più nella conversazione (ripresa).
+        self.riferimenti_verificati: set[tuple[str, int]] = set()
 
     # ------------------------------------------------------------------ avvio
 
@@ -144,6 +147,23 @@ class Agent:
 
     def nuova_conversazione(self) -> None:
         self.messaggi = self.messaggi[:1]
+        self.riferimenti_verificati = set()
+
+    def ripristina(self, storia: list[tuple[str, str]]) -> None:
+        """Riprende una conversazione salvata: [("utente" | "assistente", testo), ...].
+
+        Si ripristinano solo i messaggi visti dall'utente, non le chiamate ai tool: il modello ha il filo del
+        discorso e, se gli servono dati aggiornati, richiama i tool. Le risposte salvate erano già passate
+        dai controlli dell'harness, quindi i numeri che citano sono considerati verificati.
+        """
+        self.nuova_conversazione()
+        for ruolo, testo in storia:
+            if ruolo == "utente":
+                self.messaggi.append(Messaggio("user", testo))
+            else:
+                self.messaggi.append(Messaggio("assistant", testo))
+                self.riferimenti_verificati |= riferimenti_citati(testo)
+        self.log.registra("conversazione_ripresa", self.turno, messaggi=len(storia))
 
     def _contesto_per_modello(self, inizio_turno: int) -> list[Messaggio]:
         """Conversazione da inviare al modello, con i risultati dei tool dei turni precedenti accorciati.
@@ -260,7 +280,8 @@ class Agent:
                     self.log.registra("guardrail_coerenza", self.turno, iterazione, testo_respinto=r.testo)
                     continue
                 # Secondo controllo: i numeri di prenotazione e d'ordine citati devono venire dai tool.
-                inventati = riferimenti_inventati(r.testo, self.messaggi) if self.cfg.guardrail_coerenza else []
+                inventati = (riferimenti_inventati(r.testo, self.messaggi, self.riferimenti_verificati)
+                             if self.cfg.guardrail_coerenza else [])
                 if inventati:
                     self.log.registra("guardrail_riferimenti", self.turno, iterazione,
                                       testo_respinto=r.testo, riferimenti=inventati)
@@ -272,6 +293,7 @@ class Agent:
                     self.messaggi.append(Messaggio("system", avviso_riferimenti(inventati)))
                     continue
                 risposta_finale, motivo = r.testo.strip(), "risposta_finale"
+                self.riferimenti_verificati |= riferimenti_citati(risposta_finale)
                 break
 
             # 3. esecuzione dei tool richiesti

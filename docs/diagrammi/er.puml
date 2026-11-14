@@ -122,6 +122,27 @@ entity ORDINI_RIGHE {
   note : TEXT
 }
 
+entity CONVERSAZIONI {
+  * id_conversazione : INTEGER <<PK>>
+  --
+  * id_utente : INTEGER <<FK>>
+  * titolo : TEXT
+  modello : TEXT
+  * creata_il : TEXT
+  * aggiornata_il : TEXT
+}
+
+entity MESSAGGI_CHAT {
+  * id_messaggio : INTEGER <<PK>>
+  --
+  * id_conversazione : INTEGER <<FK>>
+  * ruolo : TEXT {utente, assistente}
+  * testo : TEXT
+  * creato_il : TEXT
+}
+
+UTENTI ||--o{ CONVERSAZIONI : "storico delle chat"
+CONVERSAZIONI ||--|{ MESSAGGI_CHAT : "contiene"
 UTENTI |o--o{ PRENOTAZIONI : "proprietario (cliente)"
 UTENTI |o--o{ ORDINI : "proprietario (cliente)"
 TAVOLI ||--o{ PRENOTAZIONI : "assegnato a"

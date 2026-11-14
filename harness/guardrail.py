@@ -96,12 +96,12 @@ def riferimenti_noti(messaggi) -> tuple[set[tuple[str, int]], set[int]]:
     return dai_tool, dall_utente
 
 
-def riferimenti_inventati(testo: str, messaggi) -> list[str]:
+def riferimenti_inventati(testo: str, messaggi, gia_verificati: set[tuple[str, int]] = frozenset()) -> list[str]:
     dai_tool, dall_utente = riferimenti_noti(messaggi)
     return sorted(
         f"{tipo} n. {numero}"
         for tipo, numero in riferimenti_citati(testo)
-        if (tipo, numero) not in dai_tool and numero not in dall_utente
+        if (tipo, numero) not in dai_tool and (tipo, numero) not in gia_verificati and numero not in dall_utente
     )
 
 

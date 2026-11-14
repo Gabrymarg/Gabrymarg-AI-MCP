@@ -125,3 +125,23 @@ CREATE TABLE ORDINI_RIGHE (
     prezzo_unitario REAL    NOT NULL,
     note            TEXT
 );
+
+-- Storico delle conversazioni della web app: solo ciò che l'utente ha visto (le sue richieste e le risposte
+-- finali), non i passaggi interni del ciclo agentico, che restano nei log JSONL.
+CREATE TABLE IF NOT EXISTS CONVERSAZIONI (
+    id_conversazione INTEGER PRIMARY KEY,
+    id_utente        INTEGER NOT NULL REFERENCES UTENTI(id_utente),
+    titolo           TEXT    NOT NULL,
+    modello          TEXT,
+    creata_il        TEXT    NOT NULL,
+    aggiornata_il    TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_conversazioni_utente ON CONVERSAZIONI(id_utente, aggiornata_il);
+
+CREATE TABLE IF NOT EXISTS MESSAGGI_CHAT (
+    id_messaggio     INTEGER PRIMARY KEY,
+    id_conversazione INTEGER NOT NULL REFERENCES CONVERSAZIONI(id_conversazione) ON DELETE CASCADE,
+    ruolo            TEXT    NOT NULL CHECK (ruolo IN ('utente', 'assistente')),
+    testo            TEXT    NOT NULL,
+    creato_il        TEXT    NOT NULL
+);
