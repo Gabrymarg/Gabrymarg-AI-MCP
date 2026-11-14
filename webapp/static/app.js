@@ -930,7 +930,7 @@ function barre(contenitore, voci) {
     const li = crea("li");
     li.title = `${v.etichetta}: ${numero(v.valore)}`;
     const traccia = crea("span", "traccia-barra");
-    const barra = crea("span", "barra");
+    const barra = crea("span", "riempimento-barra");
     barra.style.width = `${(100 * v.valore) / massimo}%`;
     traccia.append(barra);
     li.append(crea("span", "nome-barra", v.etichetta), traccia, crea("span", "valore-barra", numero(v.valore)));
