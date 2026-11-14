@@ -118,15 +118,18 @@ La documentazione dei tool (`docs/tools.md`) e i diagrammi (`docs/diagrammi/`) s
 - **Gestione degli errori:** tool inesistenti, argomenti non conformi al JSON Schema (validati *prima* di chiamare il server), errori di dominio, permessi negati, guasti e timeout. Ogni errore torna al modello come JSON strutturato.
 - **Human-in-the-loop:** quali tool richiedono conferma lo decide l'annotazione MCP `readOnlyHint` dichiarata dal server; un tool senza annotazione viene trattato come scrittura. Il riepilogo mostra nomi dei piatti e giorno della settimana.
 - **Controllo di coerenza:** se la risposta afferma un'operazione mai eseguita ("ho prenotato"), viene respinta e il modello riceve un avviso.
+- **Verifica dei riferimenti:** ogni numero di prenotazione o d'ordine citato nella risposta deve comparire nei risultati dei tool (o nei messaggi dell'utente); un numero inventato non arriva mai al cliente.
 - **Gestione del contesto:** i risultati dei tool dei turni precedenti vengono accorciati prima di essere rinviati al modello, per contenere token e latenza e rispettare i limiti dei piani gratuiti.
 - **Robustezza verso i modelli piccoli e i fornitori:** conversione dei tipi secondo lo schema, recupero e riparazione delle chiamate scritte come testo JSON, attese visibili per i limiti di frequenza, nessun tentativo inutile sui limiti giornalieri.
 - **Lavoro deterministico nel back-end:** date in linguaggio naturale ("domani", "sabato", "24 dicembre") e piatti indicati per nome sono risolti dal sistema, non dal modello.
 - **Log JSONL** di ogni passo (richieste e risposte del modello, tool, parametri, risultati, conferme, token, durate).
 - **Indipendenza dal modello:** il ciclo usa solo l'interfaccia `LLMProvider` (Ollama, Groq, qualsiasi endpoint compatibile OpenAI, Mock per i test).
+- **Router tra modelli** (`--provider router --modello "ollama:qwen2.5:3b|groq:openai/gpt-oss-120b"`): consultazioni al modello locale; scritture, allergeni, richieste complesse e turni in difficoltà al modello cloud; ripiego automatico se un modello non risponde. Il motivo di ogni scelta è nel log.
+- **Cruscotto per l'amministratore** nella web app: richieste, completamento, tempi, token e costo stimato per modello, strumenti usati e interventi delle barriere di sicurezza, calcolati dai log.
 
 ## Risultati
 
-16 scenari principali (7 normali, 9 anomali), quattro iterazioni di miglioramento:
+16 scenari principali (7 normali, 9 anomali), cinque iterazioni di miglioramento:
 
 | Batteria | qwen2.5:3b (locale) | llama3.2 3B (locale) | gpt-oss-120b (Groq, cloud) |
 |---|---|---|---|
@@ -134,11 +137,13 @@ La documentazione dei tool (`docs/tools.md`) e i diagrammi (`docs/diagrammi/`) s
 | 2 - date e piatti risolti dal back-end | 14/16 | 10/16 | - |
 | 3 - esempi astratti, recupero JSON | 13/16 | 7/16 | - |
 | 4 - conversione tipi, riparazione JSON | 13/16 | - | **16/16** |
+| 5 - codice definitivo (riferimenti, router, giacenze) | 11/16 con il router (qwen + gpt-oss-20b) | - | 15/16 |
 
-8 scenari per ruolo (clienti, sala, cucina, amministratore, tentativi di abuso): **8/8** con gpt-oss-20b (Groq), **5/8** con qwen2.5:3b. I 3 tentativi di abuso (cliente che si dichiara admin, cliente che cancella una prenotazione altrui, cucina che prenota) sono bloccati con entrambi i modelli, perché i permessi li applica il server, non il modello.
+10 scenari per ruolo (clienti, sala, cucina, amministratore, tentativi di abuso): **10/10** con gpt-oss-20b (Groq) sul codice definitivo; **5/8** con qwen2.5:3b sulla versione precedente. I 3 tentativi di abuso (cliente che si dichiara admin, cliente che cancella una prenotazione altrui, cucina che prenota) sono bloccati con entrambi i modelli, perché i permessi li applica il server, non il modello.
 
 - **Nessuna scrittura senza conferma** in tutte le esecuzioni. Le chiamate con argomenti non validi sono state fermate dalla validazione prima del server.
 - **Costi medi per scenario:** qwen in locale ~8.100 token e ~58 s; gpt-oss-120b su Groq ~6.500 token e ~15 s (circa 0,001 $ a listino).
+- **Router:** nella batteria 5 ha mandato al cloud il 73% delle chiamate, perché quasi tutte le richieste sono operazioni o domande sugli allergeni; tre dei cinque fallimenti vengono dalle parti gestite in locale. Il suo valore principale è il ripiego automatico quando un modello non risponde.
 - Report, log e confronti: `docs/iterazioni/`, `docs/confronto_batterie.md`, `docs/indicatori_sicurezza.py`.
 
 ## Dati

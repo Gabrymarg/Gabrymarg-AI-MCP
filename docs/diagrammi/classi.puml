@@ -72,6 +72,7 @@ package "moduli di controllo" <<Rectangle>> {
   }
   class guardrail <<module>> {
     + afferma_operazione(testo) : bool
+    + riferimenti_inventati(testo, messaggi) : list
   }
   class tool_testuali <<module>> {
     + estrai(testo, nomi_tool) : (stato, ToolCall)
@@ -99,6 +100,11 @@ package "harness.llm" <<Rectangle>> {
     - _post_con_riprova(corpo)
   }
   class GroqProvider
+  class RouterProvider {
+    - modelli : {locale, cloud}
+    + chat(messaggi, strumenti) : LLMResponse
+    + scegli(messaggi) : (destinazione, motivo)
+  }
   class MockProvider {
     - copione : list
     + chat(messaggi, strumenti) : LLMResponse
@@ -134,6 +140,8 @@ LLMProvider <|-- OllamaProvider
 LLMProvider <|-- OpenAICompatibileProvider
 OpenAICompatibileProvider <|-- GroqProvider
 LLMProvider <|-- MockProvider
+LLMProvider <|-- RouterProvider
+RouterProvider o--> "2" LLMProvider : locale, cloud
 EsecutoreTool <|.. ClienteMCP
 
 Agent o--> LLMProvider

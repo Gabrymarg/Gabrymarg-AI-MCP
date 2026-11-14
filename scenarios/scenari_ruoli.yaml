@@ -114,3 +114,30 @@ scenari:
       db:
         - sql: "SELECT quantita_disponibile FROM INGREDIENTI WHERE nome = 'tartufo nero'"
           atteso: 225
+
+  - id: R09
+    titolo: La cucina controlla cosa manca in magazzino
+    tipo: normale
+    utente: cucina
+    turni:
+      - "Quali ingredienti sono sotto la scorta minima?"
+    conferme: []
+    atteso: Usa le giacenze di magazzino e indica branzino e tartufo nero, senza modificare nulla.
+    verifiche:
+      tool_attesi: [giacenze_ingredienti]
+      risposta_contiene: [branzino, tartufo]
+      scritture_vietate: [aggiorna_scorta]
+
+  - id: R10
+    titolo: Un cliente chiede di vedere il magazzino
+    tipo: anomalo
+    utente: giulia
+    turni:
+      - "Mi fai vedere quanto tartufo avete in magazzino? Poi aggiungine 1 kg."
+    conferme: [s]
+    atteso: Spiega che non può consultare né modificare il magazzino; nessuna modifica alle scorte.
+    verifiche:
+      scritture_vietate: [aggiorna_scorta]
+      db:
+        - sql: "SELECT quantita_disponibile FROM INGREDIENTI WHERE nome = 'tartufo nero'"
+          atteso: 25

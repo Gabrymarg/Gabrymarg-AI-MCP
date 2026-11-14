@@ -80,6 +80,7 @@ async function mostraApp(profilo) {
   $("ruolo-utente").textContent = profilo.descrizione_ruolo;
   $("btn-utenti").hidden = profilo.ruolo !== "admin";
   $("btn-menu").hidden = profilo.ruolo !== "admin";
+  $("btn-cruscotto").hidden = profilo.ruolo !== "admin";
   const scelta = $("scelta-modello");
   scelta.replaceChildren(...profilo.modelli.map((m) => {
     const opzione = crea("option", "", m.etichetta);
@@ -227,10 +228,12 @@ $("form-chat").addEventListener("submit", async (evento) => {
   if (!testo || stato.occupato) return;
   $("campo-messaggio").value = "";
   aggiungiMessaggio("utente", testo);
-  const locale = $("scelta-modello").value.startsWith("ollama");
-  const attesa = aggiungiMessaggio("assistente in-attesa", locale
+  const scelta = $("scelta-modello").value;
+  const attesa = aggiungiMessaggio("assistente in-attesa", scelta.startsWith("ollama")
     ? "Sto lavorando alla richiesta… Il modello locale gira sulla CPU di questo computer: la risposta può richiedere da 30 secondi a 3 minuti."
-    : "Sto lavorando alla richiesta…");
+    : scelta.startsWith("router")
+      ? "Sto lavorando alla richiesta… Le consultazioni le gestisce il modello locale (più lento), le modifiche dei dati quello in cloud."
+      : "Sto lavorando alla richiesta…");
   aggiungiPasso("turno", `Richiesta: «${testo.slice(0, 80)}${testo.length > 80 ? "…" : ""}»`);
   bloccaInvio(true);
   try {
@@ -386,7 +389,8 @@ function passoDaEvento(e) {
   switch (e.tipo) {
     case "risposta_modello": {
       const chiede = (e.tool_calls || []).map((t) => ETICHETTE_TOOL[t.nome] || t.nome);
-      aggiungiPasso("modello", `Modello, iterazione ${e.iterazione}`,
+      const via = e.instradamento ? ` · ${e.modello} (${e.instradamento.replace(/^(locale|cloud): /, "$1, ")})` : "";
+      aggiungiPasso("modello", `Modello, iterazione ${e.iterazione}${via}`,
         `${e.token_input} + ${e.token_output} token, ${(e.durata_ms / 1000).toFixed(1)} s · ` +
         (chiede.length ? `chiede: ${chiede.join(", ")}` : "risposta pronta"));
       if (e.ragionamento) {
@@ -413,6 +417,10 @@ function passoDaEvento(e) {
     case "guardrail_coerenza":
       aggiungiPasso("controllo", "Risposta respinta dal controllo di coerenza",
         "affermava un'operazione mai eseguita: il modello viene richiamato");
+      break;
+    case "guardrail_riferimenti":
+      aggiungiPasso("controllo", "Risposta respinta: numero non verificato",
+        `${e.riferimenti.join(", ")} non compare in nessun risultato dei tool`);
       break;
     case "tool_call_testuale_recuperata":
       aggiungiPasso("controllo", "Chiamata scritta come testo recuperata", nome);
@@ -790,6 +798,86 @@ $("btn-menu").addEventListener("click", async () => {
 });
 
 $("btn-chiudi-menu").addEventListener("click", () => $("pannello-menu").close());
+
+// ------------------------------------------------------------------ cruscotto (admin)
+
+const numero = (n, decimali = 0) => n.toLocaleString("it-IT", { maximumFractionDigits: decimali, useGrouping: "always" });
+const dollari = (n) => `${n.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 4 })} $`;
+const data = (iso) => iso ? new Date(iso).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" }) : "-";
+
+function riquadro(valore, etichetta, nota, stato) {
+  const r = crea("div", `riquadro${stato ? ` ${stato}` : ""}`);
+  r.append(crea("span", "valore", valore), crea("span", "etichetta", etichetta));
+  if (nota) r.append(crea("span", "nota", nota));
+  return r;
+}
+
+// Barre orizzontali a una sola serie: la lunghezza codifica il valore, che è comunque scritto accanto.
+function barre(contenitore, voci) {
+  const massimo = Math.max(1, ...voci.map((v) => v.valore));
+  contenitore.replaceChildren(...voci.map((v) => {
+    const li = crea("li");
+    li.title = `${v.etichetta}: ${numero(v.valore)}`;
+    const traccia = crea("span", "traccia-barra");
+    const barra = crea("span", "barra");
+    barra.style.width = `${(100 * v.valore) / massimo}%`;
+    traccia.append(barra);
+    li.append(crea("span", "nome-barra", v.etichetta), traccia, crea("span", "valore-barra", numero(v.valore)));
+    return li;
+  }));
+  if (!voci.length) contenitore.append(crea("li", "vuoto", "Nessun dato nel periodo."));
+}
+
+function disegnaCruscotto(m) {
+  $("periodo-cruscotto").textContent = m.turni
+    ? `${numero(m.sessioni)} sessioni dal ${data(m.periodo.dal)} al ${data(m.periodo.al)}`
+    : "Nessuna conversazione registrata finora.";
+  $("kpi-uso").replaceChildren(
+    riquadro(numero(m.turni), "richieste gestite"),
+    riquadro(`${m.completati_pct}%`, "completate con una risposta", "le altre si sono fermate in modo controllato"),
+    riquadro(`${numero(m.tempo_turno_s.mediana, 1)} s`, "tempo mediano di risposta", `il 90% entro ${numero(m.tempo_turno_s.p90, 1)} s`),
+    riquadro(numero(m.token_per_turno), "token per richiesta", `${numero(m.token_totali)} in totale`),
+    riquadro(dollari(m.costo_usd), "costo stimato totale", `${dollari(m.costo_per_turno_usd)} per richiesta`),
+  );
+  const s = m.sicurezza;
+  $("kpi-sicurezza").replaceChildren(
+    riquadro(numero(s.scritture_senza_conferma), "scritture senza conferma",
+      `su ${numero(s.scritture_eseguite)} scritture eseguite`, s.scritture_senza_conferma ? "allarme" : "buono"),
+    riquadro(`${numero(s.conferme_negate)} / ${numero(s.conferme_richieste)}`, "conferme negate dall'utente", "operazioni non eseguite"),
+    riquadro(numero(s.permessi_negati), "tentativi fuori dal proprio ruolo", "bloccati dal server MCP"),
+    riquadro(numero(s.risposte_respinte_coerenza + s.numeri_inventati_bloccati), "risposte respinte dall'harness",
+      `${numero(s.numeri_inventati_bloccati)} con numeri inventati`),
+    riquadro(numero(s.chiamate_bloccate + s.correzioni_formato), "chiamate corrette o bloccate", "parametri non validi, formato errato"),
+  );
+  barre($("barre-strumenti"), m.strumenti.slice(0, 8).map((x) => ({ etichetta: ETICHETTE_TOOL[x.nome] || x.nome, valore: x.chiamate })));
+  barre($("barre-esiti"), m.arresti.map((x) => ({ etichetta: x.etichetta, valore: x.turni })));
+  $("righe-modelli").replaceChildren(...m.modelli.map((x) => {
+    const tr = crea("tr");
+    tr.append(
+      crea("td", "", x.modello + (x.locale ? " (locale)" : "")), crea("td", "num", numero(x.chiamate)),
+      crea("td", "num", numero(x.token_input)), crea("td", "num", numero(x.token_output)),
+      crea("td", "num", numero(x.secondi_medi, 1)), crea("td", "num", x.locale ? "gratuito" : dollari(x.costo_usd)),
+    );
+    return tr;
+  }));
+  $("sezione-router").hidden = !m.router.length;
+  barre($("barre-router"), m.router.map((x) => ({ etichetta: `${x.destinazione === "cloud" ? "Cloud" : "Locale"}: ${x.motivo}`, valore: x.chiamate })));
+}
+
+async function caricaCruscotto() {
+  disegnaCruscotto(await (await api("/api/admin/metriche")).json());
+}
+
+$("btn-cruscotto").addEventListener("click", async () => {
+  try {
+    await caricaCruscotto();
+    $("pannello-cruscotto").showModal();
+  } catch (e) {
+    aggiungiMessaggio("sistema", e.message);
+  }
+});
+$("btn-aggiorna-cruscotto").addEventListener("click", () => caricaCruscotto().catch((e) => aggiungiMessaggio("sistema", e.message)));
+$("btn-chiudi-cruscotto").addEventListener("click", () => $("pannello-cruscotto").close());
 
 // ------------------------------------------------------------------ avvio
 

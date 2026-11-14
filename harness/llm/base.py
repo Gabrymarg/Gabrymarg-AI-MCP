@@ -64,6 +64,7 @@ class LLMResponse:
     modello: str
     durata_ms: int = 0
     ragionamento: str = ""  # "thinking" del modello, se il modello lo produce e il fornitore lo restituisce
+    instradamento: str = ""  # con il router: quale modello ha risposto e perché
 
 
 class LLMProvider(ABC):

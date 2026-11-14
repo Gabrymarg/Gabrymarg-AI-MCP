@@ -34,7 +34,8 @@ from backend import anagrafiche, permessi, token_accesso, utenti
 from backend.db import connessione
 from backend.errori import ErroreDominio
 from backend.permessi import Utente
-from harness.config import RADICE
+from harness import metriche
+from harness.config import RADICE, Config
 from webapp.sessioni import GestoreSessioni
 
 STATIC = Path(__file__).resolve().parent / "static"
@@ -50,6 +51,9 @@ MODELLI = [
     # I limiti del piano gratuito di Groq sono per modello: un secondo modello ha un budget separato.
     {"id": "groq:openai/gpt-oss-20b", "etichetta": "gpt-oss-20b - cloud (Groq)", "provider": "groq",
      "modello": "openai/gpt-oss-20b"},
+    # Instradamento automatico: qwen in locale per le consultazioni, gpt-oss in cloud per le scritture.
+    {"id": "router:qwen+gpt-oss-120b", "etichetta": "Automatico: locale + cloud (router)", "provider": "router",
+     "modello": "ollama:qwen2.5:3b|groq:openai/gpt-oss-120b"},
 ]
 
 # Protezione dai tentativi ripetuti di indovinare la password.
@@ -60,7 +64,7 @@ _tentativi: dict[str, list[float]] = {}
 def modelli_disponibili() -> list[dict[str, str]]:
     """Modelli selezionabili; se c'è la chiave Groq il modello cloud è il predefinito (primo), perché
     il modello locale su CPU richiede da decine di secondi a qualche minuto per risposta."""
-    disponibili = [m for m in MODELLI if m["provider"] != "groq" or os.environ.get("GROQ_API_KEY")]
+    disponibili = [m for m in MODELLI if m["provider"] not in ("groq", "router") or os.environ.get("GROQ_API_KEY")]
     return sorted(disponibili, key=lambda m: m["provider"] != "groq")
 
 
@@ -401,6 +405,15 @@ async def crea_articolo(dati: Articolo, admin: Utente = Depends(solo_admin)):
 @app.put("/api/admin/articoli/{id_articolo}")
 async def modifica_articolo(id_articolo: int, dati: Articolo, admin: Utente = Depends(solo_admin)):
     return _esegui(anagrafiche.salva_articolo, **dati.model_dump(), id_articolo=id_articolo)
+
+
+# ============================================================================ cruscotto delle metriche
+
+
+@app.get("/api/admin/metriche")
+async def cruscotto(admin: Utente = Depends(solo_admin)):
+    """Indicatori calcolati dai log JSONL delle conversazioni della web app."""
+    return await asyncio.to_thread(metriche.analizza, Config().cartella_log)
 
 
 # ============================================================================ pagine statiche

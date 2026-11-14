@@ -291,7 +291,7 @@ def main() -> None:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description="Esegue gli scenari di test dell'agente")
-    p.add_argument("--provider", choices=["ollama", "openai", "groq"])
+    p.add_argument("--provider", choices=["ollama", "openai", "groq", "router"])
     p.add_argument("--modello")
     p.add_argument("--solo", help="elenco di id separati da virgola, es. S01,S05")
     p.add_argument("--file", default="scenari.yaml", help="file degli scenari (es. scenari_ruoli.yaml)")

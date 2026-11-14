@@ -30,7 +30,7 @@ from jsonschema import Draft202012Validator
 from harness.config import Config
 from harness.confirm import FunzioneConferma, riepilogo
 from harness.guardrail import AVVISO as AVVISO_GUARDRAIL
-from harness.guardrail import afferma_operazione
+from harness.guardrail import afferma_operazione, avviso_riferimenti, riferimenti_inventati
 from harness.llm.base import LLMProvider, Messaggio, ToolCall, ToolSpec, Uso
 from harness.logger import LoggerJSONL
 from harness.mcp_client import EsitoTool
@@ -52,6 +52,8 @@ MESSAGGI_ARRESTO = {
                              "Avvii una nuova conversazione e ripeta la richiesta.",
     "limite_fornitore": "Il servizio del modello ha raggiunto il limite di utilizzo del piano gratuito. "
                         "Scelga un altro modello dal menu (ad esempio quello locale) oppure riprovi più tardi.",
+    "riferimento_non_verificato": "Mi dispiace, non riesco a verificare il numero di prenotazione o d'ordine "
+                                  "che stavo per indicarle. Può chiedermi di cercarlo oppure contattare il ristorante?",
 }
 
 
@@ -178,7 +180,7 @@ class Agent:
         tool_invocati: list[str] = []
         firme: Counter[str] = Counter()
         errori_consecutivi = 0
-        scritture_eseguite = scrittura_negata = guardrail_usato = avviso_json_usato = False
+        scritture_eseguite = scrittura_negata = guardrail_usato = avviso_json_usato = riferimenti_avvisati = False
         inviati_finora = len(self.messaggi) - 1
         motivo, risposta_finale, iterazione = "max_iterazioni", "", 0
 
@@ -219,6 +221,8 @@ class Agent:
                 "risposta_modello", self.turno, iterazione,
                 testo=r.testo,
                 ragionamento=r.ragionamento or None,
+                modello=r.modello,
+                instradamento=r.instradamento or None,
                 tool_calls=[{"nome": t.nome, "argomenti": t.argomenti} for t in r.tool_calls],
                 token_input=r.uso.token_input, token_output=r.uso.token_output, durata_ms=r.durata_ms,
             )
@@ -254,6 +258,18 @@ class Agent:
                     self.messaggi.append(Messaggio("assistant", r.testo))
                     self.messaggi.append(Messaggio("system", AVVISO_GUARDRAIL))
                     self.log.registra("guardrail_coerenza", self.turno, iterazione, testo_respinto=r.testo)
+                    continue
+                # Secondo controllo: i numeri di prenotazione e d'ordine citati devono venire dai tool.
+                inventati = riferimenti_inventati(r.testo, self.messaggi) if self.cfg.guardrail_coerenza else []
+                if inventati:
+                    self.log.registra("guardrail_riferimenti", self.turno, iterazione,
+                                      testo_respinto=r.testo, riferimenti=inventati)
+                    if riferimenti_avvisati:  # già avvisato in questo turno: la risposta non arriva al cliente
+                        motivo = "riferimento_non_verificato"
+                        break
+                    riferimenti_avvisati = True
+                    self.messaggi.append(Messaggio("assistant", r.testo))
+                    self.messaggi.append(Messaggio("system", avviso_riferimenti(inventati)))
                     continue
                 risposta_finale, motivo = r.testo.strip(), "risposta_finale"
                 break

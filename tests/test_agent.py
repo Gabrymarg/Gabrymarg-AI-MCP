@@ -184,6 +184,49 @@ def test_guardrail_non_interviene_dopo_scrittura_o_rifiuto(db):
     assert not any(e["tipo"] == "guardrail_coerenza" for e in agente.log.eventi)
 
 
+def test_guardrail_respinge_numero_di_prenotazione_inventato(db):
+    """Il modello cita un numero che nessun tool ha restituito: l'harness lo rimanda indietro."""
+    copione = [
+        risposta("", ("trova_prenotazioni", {"telefono": "3331234567"})),
+        risposta("La sua prenotazione n. 999 è per sabato."),
+        risposta("La sua prenotazione n. 86 è per sabato."),
+    ]
+    esito, agente, _ = esegui(copione, "che prenotazioni ho? il mio telefono è 333 1234567")
+    evento = next(e for e in agente.log.eventi if e["tipo"] == "guardrail_riferimenti")
+    assert evento["riferimenti"] == ["prenotazione n. 999"]
+    assert esito.risposta == "La sua prenotazione n. 86 è per sabato."
+
+
+def test_guardrail_riferimenti_seconda_invenzione_bloccata(db):
+    copione = [risposta("Ordine n. 4242 pronto."), risposta("Confermo: ordine n. 4242 pronto.")]
+    esito, _, _ = esegui(copione, "a che punto è il mio ordine?")
+    assert esito.motivo_arresto == "riferimento_non_verificato"
+    assert "4242" not in esito.risposta
+
+
+def test_guardrail_riferimenti_accetta_numeri_dell_utente(db):
+    esito, agente, _ = esegui([risposta("Va bene, guardo l'ordine 7.")], "a che punto è l'ordine 7?")
+    assert not any(e["tipo"] == "guardrail_riferimenti" for e in agente.log.eventi)
+    assert esito.motivo_arresto == "risposta_finale"
+
+
+@pytest.mark.parametrize(
+    "testo,atteso",
+    [
+        ("La prenotazione n. 186 è confermata", {("prenotazione", 186)}),
+        ("Il numero della tua prenotazione è 186.", {("prenotazione", 186)}),
+        ("Ordine #12 pronto", {("ordine", 12)}),
+        ("Una prenotazione per 4 persone alle 20", set()),
+        ("Un ordine di 2 carbonare", set()),
+        ("La prenotazione delle 20:30", set()),
+    ],
+)
+def test_estrazione_riferimenti(testo, atteso):
+    from harness.guardrail import riferimenti_citati
+
+    assert riferimenti_citati(testo) == atteso
+
+
 @pytest.mark.parametrize(
     "testo,atteso",
     [

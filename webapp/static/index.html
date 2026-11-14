@@ -49,6 +49,7 @@
     </label>
     <nav class="azioni">
       <button id="btn-nuova" type="button">Nuova conversazione</button>
+      <button id="btn-cruscotto" type="button" hidden>Cruscotto</button>
       <button id="btn-menu" type="button" hidden>Menu e magazzino</button>
       <button id="btn-utenti" type="button" hidden>Gestisci utenti</button>
       <button id="btn-esci" type="button">Esci</button>
@@ -102,6 +103,57 @@
     <input name="password" type="password" placeholder="Password (min. 10 caratteri)" required minlength="10" aria-label="Password">
     <button type="submit" class="primario">Aggiungi utente</button>
   </form>
+</dialog>
+
+<!-- ============================================================ cruscotto (solo admin) -->
+<dialog id="pannello-cruscotto" class="pannello-largo" aria-labelledby="titolo-cruscotto">
+  <header class="pannello-testata">
+    <div>
+      <h2 id="titolo-cruscotto">Cruscotto dell'assistente</h2>
+      <p id="periodo-cruscotto" class="sottotitolo-pannello"></p>
+    </div>
+    <div class="pulsanti">
+      <button id="btn-aggiorna-cruscotto" type="button">Aggiorna</button>
+      <button id="btn-chiudi-cruscotto" type="button">Chiudi</button>
+    </div>
+  </header>
+
+  <section aria-labelledby="t-uso">
+    <h3 id="t-uso" class="titolo-sezione">Uso e prestazioni</h3>
+    <div id="kpi-uso" class="riquadri"></div>
+  </section>
+
+  <section aria-labelledby="t-sicurezza">
+    <h3 id="t-sicurezza" class="titolo-sezione">Controlli di sicurezza</h3>
+    <div id="kpi-sicurezza" class="riquadri"></div>
+  </section>
+
+  <div class="colonne">
+    <section aria-labelledby="t-strumenti">
+      <h3 id="t-strumenti" class="titolo-sezione">Strumenti più usati</h3>
+      <ol id="barre-strumenti" class="barre"></ol>
+    </section>
+    <section aria-labelledby="t-esiti">
+      <h3 id="t-esiti" class="titolo-sezione">Come si sono chiuse le richieste</h3>
+      <ol id="barre-esiti" class="barre"></ol>
+    </section>
+  </div>
+
+  <section aria-labelledby="t-modelli">
+    <h3 id="t-modelli" class="titolo-sezione">Modelli: token, tempi e costo stimato</h3>
+    <div class="scorrimento basso">
+      <table class="tabella-dati">
+        <thead><tr><th scope="col">Modello</th><th scope="col" class="num">Chiamate</th><th scope="col" class="num">Token input</th><th scope="col" class="num">Token output</th><th scope="col" class="num">Secondi medi</th><th scope="col" class="num">Costo stimato</th></tr></thead>
+        <tbody id="righe-modelli"></tbody>
+      </table>
+    </div>
+    <p class="nota-pannello">Costo calcolato con il listino a consumo di Groq (gpt-oss-120b: 0,15 $ / 0,60 $ per milione di token in input / output; gpt-oss-20b: 0,075 $ / 0,30 $). Il modello locale non ha costi per token. Durante lo sviluppo è stato usato il piano gratuito: la cifra indica quanto si sarebbe speso.</p>
+  </section>
+
+  <section id="sezione-router" aria-labelledby="t-router" hidden>
+    <h3 id="t-router" class="titolo-sezione">Scelte del router</h3>
+    <ol id="barre-router" class="barre"></ol>
+  </section>
 </dialog>
 
 <!-- ============================================================ menu e magazzino (solo admin) -->

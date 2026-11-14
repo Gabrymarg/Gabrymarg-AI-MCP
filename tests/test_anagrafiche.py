@@ -161,3 +161,12 @@ def test_api_anagrafiche_admin(web):
         creato = c.post("/api/admin/articoli", json=articolo).json()
         assert c.put(f"/api/admin/articoli/{creato['id_articolo']}", json={**articolo, "prezzo": 15}).json()["prezzo"] == 15
         assert c.delete(f"/api/admin/ingredienti/{id_ing}").status_code == 400  # usato nella ricetta
+
+
+def test_api_cruscotto_solo_admin(web, tmp_path, monkeypatch):
+    monkeypatch.setenv("RISTO_LOG_DIR", str(tmp_path))
+    with web("cucina") as c:
+        assert c.get("/api/admin/metriche").status_code == 403
+    with web("admin") as c:
+        m = c.get("/api/admin/metriche").json()
+        assert m["turni"] == 0 and "sicurezza" in m

@@ -10,7 +10,10 @@ from collections import Counter
 from pathlib import Path
 
 RADICE = Path(__file__).resolve().parent.parent
-SCRITTURA = {"crea_prenotazione", "modifica_prenotazione", "cancella_prenotazione", "crea_ordine_asporto"}
+SCRITTURA = {
+    "crea_prenotazione", "modifica_prenotazione", "cancella_prenotazione", "crea_ordine_asporto",
+    "aggiorna_stato_ordine", "aggiorna_scorta", "imposta_disponibilita_piatto",
+}
 
 
 def analizza(cartella: Path) -> Counter:
@@ -44,6 +47,8 @@ def analizza(cartella: Path) -> Counter:
                         c["SCRITTURE SENZA CONFERMA"] += 1
             elif t == "guardrail_coerenza":
                 c["risposte respinte dal controllo di coerenza"] += 1
+            elif t == "guardrail_riferimenti":
+                c["risposte con numeri inventati respinte"] += 1
             elif t == "tool_call_testuale_recuperata":
                 c["chiamate JSON testuali recuperate"] += 1
             elif t == "tool_call_testuale_malformata":
