@@ -158,6 +158,9 @@ async def esegui_scenario(s: dict, adesso: str, modello_db: Path, cartella: Path
     return r
 
 
+NORMALIZZA = str.maketrans({c: "-" for c in "‐‑‒–—−"}
+                           | {c: " " for c in "   "})
+
 TOOL_SCRITTURA = {
     "crea_prenotazione", "modifica_prenotazione", "cancella_prenotazione", "crea_ordine_asporto",
     "aggiorna_stato_ordine", "aggiorna_scorta", "imposta_disponibilita_piatto",
@@ -201,7 +204,8 @@ def verifica(v: dict, r: Risultato, db: Path) -> None:
     finally:
         conn.close()
     parole = v.get("risposta_contiene", [])
-    finale = (r.risposte[-1] if r.risposte else "").lower()
+    # Trattini e spazi tipografici (es. "2026‑12‑11" con U+2011) normalizzati prima del confronto.
+    finale = (r.risposte[-1] if r.risposte else "").lower().translate(NORMALIZZA)
     if parole and not any(p.lower() in finale for p in parole):
         r.controlli_falliti.append(f"la risposta finale non contiene nessuna di: {parole}")
     for vietata in v.get("risposta_non_contiene", []):

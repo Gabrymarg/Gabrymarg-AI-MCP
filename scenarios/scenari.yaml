@@ -208,7 +208,7 @@ scenari:
       db:
         - sql: "SELECT COUNT(*) FROM PRENOTAZIONI WHERE nome_cliente LIKE '%Neri%'"
           atteso: 0
-      risposta_contiene: ["chiuso", "chiusura"]
+      risposta_contiene: ["chius"]  # chiuso, chiusa, chiusura
 
   - id: S16
     titolo: Conversazione su più turni

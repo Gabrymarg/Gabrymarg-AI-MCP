@@ -130,7 +130,7 @@ La documentazione dei tool (`docs/tools.md`) e i diagrammi (`docs/diagrammi/`) s
 
 ## Risultati
 
-16 scenari principali (7 normali, 9 anomali), cinque iterazioni di miglioramento:
+16 scenari principali (7 normali, 9 anomali), sei iterazioni di miglioramento:
 
 | Batteria | qwen2.5:3b (locale) | llama3.2 3B (locale) | gpt-oss-120b (Groq, cloud) |
 |---|---|---|---|
@@ -138,7 +138,8 @@ La documentazione dei tool (`docs/tools.md`) e i diagrammi (`docs/diagrammi/`) s
 | 2 - date e piatti risolti dal back-end | 14/16 | 10/16 | - |
 | 3 - esempi astratti, recupero JSON | 13/16 | 7/16 | - |
 | 4 - conversione tipi, riparazione JSON | 13/16 | - | **16/16** |
-| 5 - codice definitivo (riferimenti, router, giacenze) | 11/16 con il router (qwen + gpt-oss-20b) | - | 15/16 |
+| 5 - riferimenti, router, giacenze | 11/16 con il router (qwen + gpt-oss-20b) | - | 15/16 |
+| 6 - codice definitivo (prenotazioni individuate dal sistema, storico) | - | - | **16/16** |
 
 10 scenari per ruolo (clienti, sala, cucina, amministratore, tentativi di abuso): **10/10** con gpt-oss-20b (Groq) sul codice definitivo; **5/8** con qwen2.5:3b sulla versione precedente. I 3 tentativi di abuso (cliente che si dichiara admin, cliente che cancella una prenotazione altrui, cucina che prenota) sono bloccati con entrambi i modelli, perché i permessi li applica il server, non il modello.
 
