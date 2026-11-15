@@ -139,13 +139,13 @@ La documentazione dei tool (`docs/tools.md`) e i diagrammi (`docs/diagrammi/`) s
 | 3 - esempi astratti, recupero JSON | 13/16 | 7/16 | - |
 | 4 - conversione tipi, riparazione JSON | 13/16 | - | **16/16** |
 | 5 - riferimenti, router, giacenze | 11/16 con il router (qwen + gpt-oss-20b) | - | 15/16 |
-| 6 - codice definitivo (prenotazioni individuate dal sistema, storico) | - | - | **16/16** |
+| 6 - codice definitivo (prenotazioni individuate dal sistema, storico) | 15/16 con il router (qwen + gpt-oss-20b) | - | **16/16** |
 
 10 scenari per ruolo (clienti, sala, cucina, amministratore, tentativi di abuso): **10/10** con gpt-oss-20b (Groq) sul codice definitivo; **5/8** con qwen2.5:3b sulla versione precedente. I 3 tentativi di abuso (cliente che si dichiara admin, cliente che cancella una prenotazione altrui, cucina che prenota) sono bloccati con entrambi i modelli, perché i permessi li applica il server, non il modello.
 
 - **Nessuna scrittura senza conferma** in tutte le esecuzioni. Le chiamate con argomenti non validi sono state fermate dalla validazione prima del server.
 - **Costi medi per scenario:** qwen in locale ~8.100 token e ~58 s; gpt-oss-120b su Groq ~6.500 token e ~15 s (circa 0,001 $ a listino).
-- **Router:** nella batteria 5 ha mandato al cloud il 73% delle chiamate, perché quasi tutte le richieste sono operazioni o domande sugli allergeni; tre dei cinque fallimenti vengono dalle parti gestite in locale. Il suo valore principale è il ripiego automatico quando un modello non risponde.
+- **Router:** nella batteria 6 ha mandato al cloud il 90% delle chiamate (73% nella batteria 5), perché quasi tutte le richieste sono operazioni o domande sugli allergeni; tre dei cinque fallimenti vengono dalle parti gestite in locale. Il suo valore principale è il ripiego automatico quando un modello non risponde.
 - Report, log e confronti: `docs/iterazioni/`, `docs/confronto_batterie.md`, `docs/indicatori_sicurezza.py`.
 
 ## Dati
