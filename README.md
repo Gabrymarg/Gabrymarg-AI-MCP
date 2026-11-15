@@ -145,7 +145,7 @@ La documentazione dei tool (`docs/tools.md`) e i diagrammi (`docs/diagrammi/`) s
 
 - **Nessuna scrittura senza conferma** in tutte le esecuzioni. Le chiamate con argomenti non validi sono state fermate dalla validazione prima del server.
 - **Costi medi per scenario:** qwen in locale ~8.100 token e ~58 s; gpt-oss-120b su Groq ~6.500 token e ~15 s (circa 0,001 $ a listino).
-- **Router:** nella batteria 6 ha mandato al cloud il 90% delle chiamate (73% nella batteria 5), perché quasi tutte le richieste sono operazioni o domande sugli allergeni; tre dei cinque fallimenti vengono dalle parti gestite in locale. Il suo valore principale è il ripiego automatico quando un modello non risponde.
+- **Router:** nella batteria 6 ha mandato al cloud il 90% delle chiamate (73% nella batteria 5), perché quasi tutte le richieste sono operazioni o domande sugli allergeni; gli errori vengono dalle parti gestite in locale (3 su 5 nella batteria 5, l'unico nella batteria 6). Il suo valore principale è il ripiego automatico quando un modello non risponde.
 - Report, log e confronti: `docs/iterazioni/`, `docs/confronto_batterie.md`, `docs/indicatori_sicurezza.py`.
 
 ## Dati
