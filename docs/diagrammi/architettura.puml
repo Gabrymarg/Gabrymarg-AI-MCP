@@ -14,10 +14,11 @@ node "Browser" {
 node "Web app (FastAPI, porta 8000)" {
   [Autenticazione\nlogin, cookie HttpOnly,\nblocco tentativi] as AUTH
   [Gestore sessioni\nuna per utente] as SES
-  [API amministrazione\nutenti e ruoli,\nmenu e magazzino] as ADM
+  [API amministrazione\nutenti e permessi,\nmenu e magazzino,\ncruscotto] as ADM
+  [Storico delle\nconversazioni] as STO
   package "Harness agentico" {
-    [Agent\nciclo, validazione,\nconferma, coerenza,\ngestione contesto] as AG
-    [LLMProvider] as PROV
+    [Agent\nciclo, validazione,\nconferma, coerenza,\nverifica dei riferimenti,\ngestione contesto] as AG
+    [LLMProvider\n+ router locale/cloud] as PROV
     [ClienteMCP\nHTTP + Bearer token] as CLI
     [LoggerJSONL] as LOG
   }
@@ -25,11 +26,11 @@ node "Web app (FastAPI, porta 8000)" {
 
 node "Server MCP (porta 8765)" {
   [Verifica token\n+ ruolo dal DB] as VER
-  [18 tool\npermessi per ruolo] as TOOLS
+  [18 tool\npermessi per ruolo\n(letti dal DB a ogni chiamata)] as TOOLS
 }
 
 node "Back-end" {
-  [Servizi di dominio\nprenotazioni, menu,\nordini, utenti,\nanagrafiche] as SRV
+  [Servizi di dominio\nprenotazioni, menu, ordini,\nutenti, anagrafiche,\npermessi (con vincoli), storico] as SRV
   database "SQLite" as DB
 }
 
@@ -43,6 +44,8 @@ FE --> AUTH : login (HTTPS in produzione)
 FE --> SES : chat (Server-Sent Events),\nconferme
 FE --> ADM : solo admin
 SES --> AG
+SES --> STO : salva i messaggi
+STO --> DB
 AG --> PROV
 PROV --> OLL
 PROV --> GROQ

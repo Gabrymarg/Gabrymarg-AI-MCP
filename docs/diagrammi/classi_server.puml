@@ -85,9 +85,21 @@ package "backend" <<Rectangle>> {
     dettagli : dict
   }
   class permessi <<module>> {
-    PERMESSI : dict<tool, set<ruolo>>
-    + puo(ruolo, tool) : bool
-    + tool_consentiti(ruolo) : list
+    PERMESSI_PREDEFINITI : dict<tool, set<ruolo>>
+    SOLO_PERSONALE, SEMPRE_CONSENTITI : vincoli
+    + carica(conn) : dict  <<dal DB, vincoli riapplicati>>
+    + puo(ruolo, tool, tabella) : bool
+    + tool_consentiti(ruolo, tabella) : list
+    + imposta(conn, admin, ruolo, tool, consentito)
+    + ripristina(conn, admin)
+    + registro(conn) : list
+  }
+  class storico <<module>> {
+    + nuova(conn, id_utente, testo) : int
+    + aggiungi(conn, id, ruolo, testo)
+    + elenco(conn, utente, tutte) : list
+    + leggi(conn, id, utente, per_riprendere)
+    + elimina(conn, id, utente)
   }
   class Utente {
     id_utente : int
@@ -117,6 +129,7 @@ server ..> Utente
 prenotazioni ..> Utente : proprietà dei dati
 ordini ..> Utente
 permessi ..> Utente
+storico ..> Utente : proprietario o admin (sola lettura)
 
 database "SQLite\n(risto.db)" as DB
 

@@ -27,6 +27,12 @@ rectangle "Assistente virtuale Osteria del Borgo" {
   usecase "Vedere e aggiornare\ngli ordini da preparare" as O3
   usecase "Aggiornare magazzino\ne piatti nel menu" as A1
   usecase "Gestire utenti e ruoli\n(pannello web)" as A2
+  usecase "Concedere e revocare\ni permessi dei ruoli\n(pannello web)" as A3
+  usecase "Gestire articoli, ricette,\nallergeni e categorie\n(pannello web)" as A4
+  usecase "Consultare il cruscotto\ndegli indicatori" as A5
+  usecase "Leggere le conversazioni\ndi tutti gli utenti" as A6
+  usecase "Consultare le giacenze\ndi magazzino" as G1
+  usecase "Rileggere e riprendere\nle proprie conversazioni" as S1
   usecase "Confermare l'operazione\n(human-in-the-loop)" as C1
 }
 
@@ -42,6 +48,15 @@ Cucina --> M1
 Cucina --> O3
 Admin --> A1
 Admin --> A2
+Admin --> A3
+Admin --> A4
+Admin --> A5
+Admin --> A6
+Admin --> G1
+Cucina --> G1
+Cliente --> S1
+Sala --> S1
+Cucina --> S1
 
 P2 ..> C1 : <<include>>
 O1 ..> C1 : <<include>>
@@ -57,5 +72,8 @@ note bottom of C1
   (tranne l'ospite) e per il controllo dei permessi
   sul server MCP: il ruolo deriva dal token di accesso,
   non da quanto dichiarato nella conversazione.
+  I permessi qui mostrati sono quelli predefiniti:
+  l'amministratore può modificarli (A3), entro i
+  vincoli fissati nel codice.
 end note
 @enduml
