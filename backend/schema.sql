@@ -145,3 +145,23 @@ CREATE TABLE IF NOT EXISTS MESSAGGI_CHAT (
     testo            TEXT    NOT NULL,
     creato_il        TEXT    NOT NULL
 );
+
+-- Permessi dei ruoli (RBAC): quale ruolo può usare quale tool. Modificabili dall'amministratore dalla web app,
+-- entro i vincoli scritti nel codice (backend/permessi.py): l'amministratore ha sempre tutti i permessi e gli
+-- strumenti interni del personale non possono essere concessi a clienti e ospiti.
+CREATE TABLE IF NOT EXISTS PERMESSI_RUOLI (
+    ruolo TEXT NOT NULL CHECK (ruolo IN ('ospite', 'cliente', 'sala', 'cucina', 'admin')),
+    tool  TEXT NOT NULL,
+    PRIMARY KEY (ruolo, tool)
+);
+
+-- Registro delle modifiche ai permessi: chi, quando, cosa.
+CREATE TABLE IF NOT EXISTS REGISTRO_PERMESSI (
+    id_modifica INTEGER PRIMARY KEY,
+    quando      TEXT    NOT NULL,
+    id_utente   INTEGER REFERENCES UTENTI(id_utente),
+    username    TEXT    NOT NULL,
+    ruolo       TEXT,
+    tool        TEXT,
+    azione      TEXT    NOT NULL CHECK (azione IN ('concesso', 'revocato', 'ripristino'))
+);

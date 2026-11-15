@@ -19,7 +19,7 @@ from pathlib import Path
 
 from faker import Faker
 
-from backend import clock, ordini, prenotazioni, utenti
+from backend import clock, ordini, permessi, prenotazioni, utenti
 from backend.db import connetti, crea_schema, percorso_db
 from backend.errori import ErroreDominio
 
@@ -336,6 +336,7 @@ def crea_database(percorso: Path, seme: int = 42) -> dict:
     try:
         crea_schema(conn)
         info = popola(conn, seme)
+        permessi.crea_tabelle(conn)  # permessi dei ruoli: valori predefiniti, modificabili dall'admin
         conn.commit()
     finally:
         conn.close()

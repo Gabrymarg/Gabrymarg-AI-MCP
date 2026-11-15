@@ -165,3 +165,23 @@ def test_prompt_injection_con_ruolo_dichiarato(server):
     risultato = json.loads([m for m in agente.messaggi if m.ruolo == "tool"][-1].contenuto)
     # Il tool non era tra quelli presentati al modello: l'harness lo blocca prima ancora del server.
     assert risultato["errore"]["codice"] == "TOOL_INESISTENTE"
+
+
+def test_permessi_modificati_valgono_subito_sul_server(server):
+    """L'admin revoca un permesso nel database: il server lo nega alla chiamata successiva."""
+    from backend import permessi
+    from backend.permessi import Utente
+
+    conn = connetti(server["db"])
+    id_admin = conn.execute("SELECT id_utente FROM UTENTI WHERE username = 'admin'").fetchone()[0]
+    token_cucina = token_di(server, "cucina")
+    assert chiama(server, token_cucina, "ordini_da_preparare").ok
+    permessi.imposta(conn, Utente(id_admin, "admin"), "cucina", "ordini_da_preparare", False)
+    conn.commit()
+    esito = chiama(server, token_cucina, "ordini_da_preparare")
+    assert not esito.ok and esito.errore["codice"] == "PERMESSO_NEGATO"
+    assert "ordini_da_preparare" not in chiama(server, token_cucina, "mio_profilo").contenuto["tool_consentiti"]
+    permessi.ripristina(conn, Utente(id_admin, "admin"))
+    conn.commit()
+    conn.close()
+    assert chiama(server, token_cucina, "ordini_da_preparare").ok

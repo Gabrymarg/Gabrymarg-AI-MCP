@@ -94,6 +94,7 @@ async def ciclo_di_vita(app: FastAPI):
     app.state.sessioni = GestoreSessioni(URL_MCP)
     with connessione() as conn:
         storico.crea_tabelle(conn)  # database creati prima dell'introduzione dello storico
+        permessi.crea_tabelle(conn)  # e dei permessi modificabili
     try:
         yield
     finally:
@@ -257,6 +258,73 @@ async def nuova_conversazione(request: Request, dati: tuple[Utente, str] = Depen
     while await uscita.get() is not None:
         pass
     return {"ok": True}
+
+
+# ============================================================================ ruoli e permessi (solo admin)
+
+
+class ModificaPermesso(BaseModel):
+    ruolo: str
+    tool: str
+    consentito: bool
+
+
+def _matrice_permessi(conn) -> dict[str, Any]:
+    tabella = permessi.carica(conn)
+    ordine_ruoli = ["ospite", "cliente", "sala", "cucina", "admin"]
+    return {
+        "ruoli": [{"codice": r, "etichetta": permessi.ETICHETTE_RUOLI[r]} for r in ordine_ruoli],
+        "strumenti": [
+            {
+                "nome": tool,
+                "scrittura": tool in permessi.TOOL_SCRITTURA,
+                "ruoli": {
+                    r: {"consentito": r in tabella[tool], "bloccato": permessi.motivo_blocco(r, tool)}
+                    for r in ordine_ruoli
+                },
+            }
+            for tool in sorted(tabella)
+            if tool not in permessi.SEMPRE_CONSENTITI
+        ],
+        "registro": permessi.registro(conn),
+    }
+
+
+async def _chiudi_sessioni(request: Request, ruoli: set[str], tranne: int | None = None) -> None:
+    """Le sessioni aperte ripartono con i nuovi permessi (l'agente ricarica l'elenco dei tool)."""
+    with connessione() as conn:
+        segnaposti = ",".join("?" * len(ruoli))
+        ids = [r[0] for r in conn.execute(f"SELECT id_utente FROM UTENTI WHERE ruolo IN ({segnaposti})", list(ruoli))]
+    for id_utente in ids:
+        if id_utente != tranne:
+            await request.app.state.sessioni.chiudi(id_utente)
+
+
+@app.get("/api/admin/permessi")
+async def elenco_permessi(admin: Utente = Depends(solo_admin)):
+    with connessione() as conn:
+        return _matrice_permessi(conn)
+
+
+@app.put("/api/admin/permessi")
+async def modifica_permesso(modifica: ModificaPermesso, request: Request, admin: Utente = Depends(solo_admin)):
+    try:
+        with connessione() as conn:
+            permessi.imposta(conn, admin, modifica.ruolo, modifica.tool, modifica.consentito)
+    except permessi.PermessoNonModificabile as e:
+        raise HTTPException(400, str(e)) from None
+    await _chiudi_sessioni(request, {modifica.ruolo}, tranne=admin.id_utente)
+    with connessione() as conn:
+        return _matrice_permessi(conn)
+
+
+@app.post("/api/admin/permessi/ripristina")
+async def ripristina_permessi(request: Request, admin: Utente = Depends(solo_admin)):
+    with connessione() as conn:
+        permessi.ripristina(conn, admin)
+    await _chiudi_sessioni(request, {"cliente", "sala", "cucina"}, tranne=admin.id_utente)
+    with connessione() as conn:
+        return _matrice_permessi(conn)
 
 
 # ============================================================================ storico delle conversazioni

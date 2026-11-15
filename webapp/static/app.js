@@ -244,7 +244,14 @@ $("form-chat").addEventListener("submit", async (evento) => {
     await leggiFlusso(risposta, attesa);
   } catch (e) {
     attesa.remove();
-    aggiungiMessaggio("sistema", e.message);
+    if (e.message.includes("Nessuna sessione attiva")) {
+      aggiungiMessaggio("sistema", "La sessione è stata riavviata (per esempio perché sono cambiati i permessi): rinvia il messaggio.");
+      $("campo-messaggio").value = testo;
+      bloccaInvio(false);
+      await apriSessione();
+    } else {
+      aggiungiMessaggio("sistema", e.message);
+    }
   } finally {
     bloccaInvio(false);
     $("campo-messaggio").focus();
@@ -510,6 +517,7 @@ async function caricaUtenti() {
 }
 
 $("btn-utenti").addEventListener("click", async () => {
+  $("tab-utenti").click();
   esitoUtenti("");
   try {
     await caricaUtenti();
@@ -520,6 +528,102 @@ $("btn-utenti").addEventListener("click", async () => {
 });
 
 $("btn-chiudi-utenti").addEventListener("click", () => $("pannello-utenti").close());
+
+// ------------------------------------------------------------------ ruoli e permessi (admin)
+
+function esitoPermessi(testo, errore = false) {
+  const el = $("esito-permessi");
+  el.textContent = testo;
+  el.classList.toggle("errore", errore);
+}
+
+const AZIONI_REGISTRO = { concesso: "ha concesso", revocato: "ha revocato", ripristino: "ha ripristinato i permessi predefiniti" };
+
+function disegnaPermessi(dati) {
+  const intestazione = crea("tr");
+  intestazione.append(crea("th", "", "Strumento"));
+  for (const r of dati.ruoli) {
+    const th = crea("th", "centro", r.etichetta);
+    th.scope = "col";
+    intestazione.append(th);
+  }
+  $("testa-permessi").replaceChildren(intestazione);
+
+  $("righe-permessi").replaceChildren(...dati.strumenti.map((s) => {
+    const tr = crea("tr");
+    const nome = crea("td");
+    nome.append(crea("span", "", ETICHETTE_TOOL[s.nome] || s.nome));
+    if (s.scrittura) nome.append(crea("span", "segno-scrittura", "modifica i dati"));
+    tr.append(nome);
+    for (const r of dati.ruoli) {
+      const cella = s.ruoli[r.codice];
+      const td = crea("td", "centro");
+      const spunta = crea("input");
+      spunta.type = "checkbox";
+      spunta.checked = cella.consentito;
+      spunta.disabled = Boolean(cella.bloccato);
+      spunta.setAttribute("aria-label", `${ETICHETTE_TOOL[s.nome] || s.nome}: ${r.etichetta}`);
+      if (cella.bloccato) td.title = cella.bloccato;
+      spunta.addEventListener("change", async () => {
+        try {
+          const nuovi = await (await api("/api/admin/permessi", {
+            metodo: "PUT", corpo: { ruolo: r.codice, tool: s.nome, consentito: spunta.checked },
+          })).json();
+          disegnaPermessi(nuovi);
+          esitoPermessi(`${r.etichetta}: «${ETICHETTE_TOOL[s.nome] || s.nome}» ${spunta.checked ? "concesso" : "revocato"}`);
+        } catch (e) {
+          spunta.checked = !spunta.checked;
+          esitoPermessi(e.message, true);
+        }
+      });
+      td.append(spunta);
+      tr.append(td);
+    }
+    return tr;
+  }));
+
+  const etichettaRuolo = Object.fromEntries(dati.ruoli.map((r) => [r.codice, r.etichetta]));
+  $("registro-permessi").replaceChildren(...(dati.registro.length ? dati.registro.map((m) => {
+    const cosa = m.azione === "ripristino" ? "" : ` «${ETICHETTE_TOOL[m.tool] || m.tool}» a ${etichettaRuolo[m.ruolo] || m.ruolo}`;
+    return crea("li", "", `${data(m.quando)} - ${m.username} ${AZIONI_REGISTRO[m.azione]}${cosa}`);
+  }) : [crea("li", "vuoto", "Nessuna modifica: sono in uso i permessi predefiniti.")]));
+}
+
+async function caricaPermessi() {
+  disegnaPermessi(await (await api("/api/admin/permessi")).json());
+}
+
+for (const scheda of document.querySelectorAll("#pannello-utenti [role=tab]")) {
+  scheda.addEventListener("click", async () => {
+    for (const altra of document.querySelectorAll("#pannello-utenti [role=tab]")) {
+      const attiva = altra === scheda;
+      altra.setAttribute("aria-selected", String(attiva));
+      $(altra.getAttribute("aria-controls")).hidden = !attiva;
+    }
+    esitoPermessi("");
+    if (scheda.id === "tab-permessi") {
+      try { await caricaPermessi(); } catch (e) { esitoPermessi(e.message, true); }
+    }
+  });
+}
+
+$("btn-ripristina-permessi").addEventListener("click", () => {
+  const b = $("btn-ripristina-permessi");
+  if (!b.dataset.armato) {
+    b.dataset.armato = "1";
+    b.textContent = "Conferma: ripristina i predefiniti";
+    b.classList.add("distruttivo");
+    setTimeout(() => { delete b.dataset.armato; b.textContent = "Ripristina i permessi predefiniti"; b.classList.remove("distruttivo"); }, 4000);
+    return;
+  }
+  delete b.dataset.armato;
+  b.textContent = "Ripristina i permessi predefiniti";
+  b.classList.remove("distruttivo");
+  api("/api/admin/permessi/ripristina", { metodo: "POST" })
+    .then((r) => r.json())
+    .then((dati) => { disegnaPermessi(dati); esitoPermessi("Permessi predefiniti ripristinati"); })
+    .catch((e) => esitoPermessi(e.message, true));
+});
 
 $("form-nuovo-utente").addEventListener("submit", async (evento) => {
   evento.preventDefault();

@@ -101,7 +101,7 @@ Il server MCP si può avviare anche da solo: `python -m mcp_server.server` (stdi
 ## Test
 
 ```bash
-python -m pytest                                                               # 178 test, non serve un modello
+python -m pytest                                                               # 191 test, non serve un modello
 python scenarios/run_scenarios.py --modello qwen2.5:3b                         # 16 scenari (ospite)
 python scenarios/run_scenarios.py --file scenari_ruoli.yaml --provider groq --modello openai/gpt-oss-20b   # 8 scenari per ruolo
 ```
@@ -125,6 +125,7 @@ La documentazione dei tool (`docs/tools.md`) e i diagrammi (`docs/diagrammi/`) s
 - **Log JSONL** di ogni passo (richieste e risposte del modello, tool, parametri, risultati, conferme, token, durate).
 - **Indipendenza dal modello:** il ciclo usa solo l'interfaccia `LLMProvider` (Ollama, Groq, qualsiasi endpoint compatibile OpenAI, Mock per i test).
 - **Router tra modelli** (`--provider router --modello "ollama:qwen2.5:3b|groq:openai/gpt-oss-120b"`): consultazioni al modello locale; scritture, allergeni, richieste complesse e turni in difficoltà al modello cloud; ripiego automatico se un modello non risponde. Il motivo di ogni scelta è nel log.
+- **Permessi dei ruoli modificabili** (RBAC): l'amministratore decide dalla web app quali strumenti può usare ogni ruolo; il server li rilegge a ogni chiamata. I vincoli di sicurezza restano nel codice (l'admin ha sempre tutti i permessi; gli strumenti interni non si concedono a clienti e ospiti) e ogni modifica è registrata.
 - **Storico delle conversazioni** nella web app: ogni utente rilegge, riprende ed elimina le proprie chat; l'amministratore può leggerle tutte ma riprendere solo le proprie. Si salvano solo i messaggi visti dall'utente; i passaggi interni restano nei log.
 - **Cruscotto per l'amministratore** nella web app: richieste, completamento, tempi, token e costo stimato per modello, strumenti usati e interventi delle barriere di sicurezza, calcolati dai log.
 

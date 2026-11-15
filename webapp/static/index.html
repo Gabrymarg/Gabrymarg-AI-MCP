@@ -78,11 +78,17 @@
 </div>
 
 <!-- ============================================================ gestione utenti (solo admin) -->
-<dialog id="pannello-utenti" aria-labelledby="titolo-utenti">
+<dialog id="pannello-utenti" class="pannello-largo" aria-labelledby="titolo-utenti">
   <header class="pannello-testata">
-    <h2 id="titolo-utenti">Utenti e ruoli</h2>
+    <h2 id="titolo-utenti">Utenti, ruoli e permessi</h2>
     <button id="btn-chiudi-utenti" type="button">Chiudi</button>
   </header>
+  <div class="schede" role="tablist" aria-label="Gestione degli accessi">
+    <button type="button" role="tab" id="tab-utenti" aria-controls="sez-utenti" aria-selected="true">Utenti</button>
+    <button type="button" role="tab" id="tab-permessi" aria-controls="sez-permessi" aria-selected="false">Ruoli e permessi</button>
+  </div>
+
+  <section id="sez-utenti" role="tabpanel" aria-labelledby="tab-utenti">
   <table class="tabella-utenti">
     <thead>
       <tr><th scope="col">Utente</th><th scope="col">Nome</th><th scope="col">Ruolo</th><th scope="col">Stato</th><th scope="col">Nuova password</th></tr>
@@ -104,6 +110,25 @@
     <input name="password" type="password" placeholder="Password (min. 10 caratteri)" required minlength="10" aria-label="Password">
     <button type="submit" class="primario">Aggiungi utente</button>
   </form>
+  </section>
+
+  <section id="sez-permessi" role="tabpanel" aria-labelledby="tab-permessi" hidden>
+    <p class="nota-pannello">Quali strumenti dell'assistente può usare ogni ruolo. Le modifiche valgono subito: il server
+      le applica alla chiamata successiva e le conversazioni aperte del ruolo ripartono. Le caselle grigie sono vincoli di
+      sicurezza fissati nel codice (passa il mouse sopra per il motivo).</p>
+    <p id="esito-permessi" class="esito" role="status"></p>
+    <div class="scorrimento">
+      <table class="tabella-dati tabella-permessi">
+        <thead id="testa-permessi"></thead>
+        <tbody id="righe-permessi"></tbody>
+      </table>
+    </div>
+    <div class="barra">
+      <h3 class="titolo-sezione">Registro delle modifiche</h3>
+      <button id="btn-ripristina-permessi" type="button">Ripristina i permessi predefiniti</button>
+    </div>
+    <ol id="registro-permessi" class="registro"></ol>
+  </section>
 </dialog>
 
 <!-- ============================================================ storico delle conversazioni -->

@@ -141,6 +141,23 @@ entity MESSAGGI_CHAT {
   * creato_il : TEXT
 }
 
+entity PERMESSI_RUOLI {
+  * ruolo : TEXT <<PK>>
+  * tool : TEXT <<PK>>
+}
+
+entity REGISTRO_PERMESSI {
+  * id_modifica : INTEGER <<PK>>
+  --
+  * quando : TEXT
+  id_utente : INTEGER <<FK>>
+  * username : TEXT
+  ruolo : TEXT
+  tool : TEXT
+  * azione : TEXT {concesso, revocato, ripristino}
+}
+
+UTENTI |o--o{ REGISTRO_PERMESSI : "modifica (admin)"
 UTENTI ||--o{ CONVERSAZIONI : "storico delle chat"
 CONVERSAZIONI ||--|{ MESSAGGI_CHAT : "contiene"
 UTENTI |o--o{ PRENOTAZIONI : "proprietario (cliente)"

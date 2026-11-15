@@ -392,6 +392,18 @@ dialog::backdrop { background: rgb(20 30 25 / 0.45); }
 .tabella-chat th, .tabella-chat td { border-bottom: 1px solid var(--salvia); padding: 0.3rem 0.7rem 0.3rem 0; text-align: left; }
 .tabella-chat th { font-weight: 600; }
 
+/* ------------------------------------------------------------ permessi */
+
+.tabella-permessi th.centro, .tabella-permessi td.centro { text-align: center; }
+.tabella-permessi input[type="checkbox"] { width: 1.1rem; height: 1.1rem; accent-color: var(--bottiglia); }
+.tabella-permessi input[type="checkbox"]:disabled { cursor: not-allowed; opacity: 0.45; }
+.segno-scrittura {
+  display: inline-block; margin-left: 0.5rem; padding: 0 0.4rem; border-radius: 999px;
+  font-size: 0.72rem; background: var(--oro-chiaro); color: var(--inchiostro);
+}
+.registro { margin: 0; padding-left: 1.2rem; font-size: 0.85rem; color: var(--grafite); max-height: 10rem; overflow: auto; }
+.registro li.vuoto { list-style: none; margin-left: -1.2rem; }
+
 /* ------------------------------------------------------------ storico */
 
 .messaggi.lettura { max-height: 55vh; overflow: auto; padding: 0.5rem 0.25rem; }

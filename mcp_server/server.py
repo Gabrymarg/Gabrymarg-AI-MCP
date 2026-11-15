@@ -134,6 +134,11 @@ def utente() -> Utente:
     return _utente_corrente.get()
 
 
+def _tabella_corrente() -> dict[str, set[str]]:
+    with connessione() as conn:
+        return permessi.carica(conn)
+
+
 # ============================================================================ infrastruttura dei tool
 
 DESCR_DATA = (
@@ -181,11 +186,14 @@ def tool_protetto(fn: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(fn)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         chi = _identita()
-        if not permessi.puo(chi.ruolo, fn.__name__):
+        with connessione() as conn:
+            # Permessi correnti (modificabili dall'admin) letti a ogni chiamata, con i vincoli del codice.
+            tabella = permessi.carica(conn)
+        if not permessi.puo(chi.ruolo, fn.__name__, tabella):
             raise _errore(
                 "PERMESSO_NEGATO",
                 f"Il ruolo '{chi.ruolo}' non è autorizzato a usare '{fn.__name__}'.",
-                tool_consentiti=permessi.tool_consentiti(chi.ruolo),
+                tool_consentiti=permessi.tool_consentiti(chi.ruolo, tabella),
             )
         _guasto_simulato(fn.__name__)
         segnaposto = _utente_corrente.set(chi)
@@ -212,7 +220,7 @@ def mio_profilo() -> Profilo:
         ruolo=u.ruolo,
         descrizione_ruolo=permessi.ETICHETTE_RUOLI[u.ruolo],
         nome=u.nome or None,
-        tool_consentiti=permessi.tool_consentiti(u.ruolo),
+        tool_consentiti=permessi.tool_consentiti(u.ruolo, _tabella_corrente()),
     )
 
 
